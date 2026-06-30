@@ -11,9 +11,17 @@ interface Notification {
   created_at: string;
 }
 
+// По заголовку уведомления определяем нужный фильтр
+function titleToFilter(title: string): 'pending' | 'confirmed' | 'done' {
+  if (title === 'Новая заявка' || title === 'Клиент отменил запись') return 'pending';
+  if (title === 'Заявка подтверждена') return 'confirmed';
+  if (title === 'Услуга оказана') return 'done';
+  return 'pending';
+}
+
 interface Props {
   token: string;
-  onGoBooking?: (bookingId: number) => void;
+  onGoBooking?: (bookingId: number, filter: 'pending' | 'confirmed' | 'done') => void;
 }
 
 function timeAgo(iso: string) {
@@ -128,7 +136,11 @@ export default function NotificationBell({ token, onGoBooking }: Props) {
                   key={n.id}
                   onClick={() => {
                     if (n.booking_id && onGoBooking) {
-                      onGoBooking(n.booking_id);
+                      onGoBooking(n.booking_id, titleToFilter(n.title));
+                      // Скрываем уведомление из списка сразу после клика
+                      setItems(prev => prev.filter(item => item.id !== n.id));
+                      setUnread(prev => Math.max(0, prev - (n.is_read ? 0 : 1)));
+                      prevUnread.current = Math.max(0, prevUnread.current - (n.is_read ? 0 : 1));
                       setOpen(false);
                     }
                   }}

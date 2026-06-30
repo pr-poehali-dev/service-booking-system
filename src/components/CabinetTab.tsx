@@ -23,7 +23,7 @@ import {
 export function TopBar({ session, onLogout, onGoBooking }: {
   session: UserSession;
   onLogout: () => void;
-  onGoBooking?: (bookingId: number) => void;
+  onGoBooking?: (bookingId: number, filter: 'pending' | 'confirmed' | 'done') => void;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
@@ -72,8 +72,9 @@ export function BottomNav({ active, onChange, isAdmin }: {
 }
 
 // ─── Кабинет мастера ──────────────────────────────────────────────────────────
-export function MasterCabinet({ session, setSession, focusBookingId }: {
-  session: UserSession; setSession: (s: UserSession) => void; focusBookingId?: number | null;
+export function MasterCabinet({ session, setSession, focusBookingId, focusFilter }: {
+  session: UserSession; setSession: (s: UserSession) => void;
+  focusBookingId?: number | null; focusFilter?: 'pending' | 'confirmed' | 'done';
 }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -134,20 +135,9 @@ export function MasterCabinet({ session, setSession, focusBookingId }: {
   useEffect(() => {
     if (!focusBookingId) return;
     setActiveTab('bookings');
-    setBookings(prev => {
-      const b = prev.find(b => b.id === focusBookingId);
-      if (b) {
-        const status = b.status as 'pending' | 'confirmed' | 'done';
-        if (status === 'pending' || status === 'confirmed' || status === 'done') {
-          setBookingFilter(status);
-        }
-        setTimeout(() => focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
-      } else {
-        setBookingFilter('pending');
-      }
-      return prev;
-    });
-  }, [focusBookingId]);
+    setBookingFilter(focusFilter ?? 'pending');
+    setTimeout(() => focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+  }, [focusBookingId, focusFilter]);
 
   const updateStatus = async (id: number, status: string) => {
     await bookingsApi.updateStatus(session.session_token, id, status);
@@ -615,7 +605,7 @@ export function MasterCabinet({ session, setSession, focusBookingId }: {
 }
 
 // ─── Мои записи ──────────────────────────────────────────────────────────────
-export function MyBookings({ session, focusBookingId }: { session: UserSession; focusBookingId?: number | null }) {
+export function MyBookings({ session, focusBookingId, focusFilter }: { session: UserSession; focusBookingId?: number | null; focusFilter?: 'pending' | 'confirmed' | 'done'; }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [ratingMap, setRatingMap] = useState<Record<number, number>>({});
@@ -646,14 +636,11 @@ export function MyBookings({ session, focusBookingId }: { session: UserSession; 
 
   useEffect(() => {
     if (!focusBookingId) return;
-    const b = bookings.find(b => b.id === focusBookingId);
-    const status = b?.status;
-    const filter = (status === 'confirmed' || status === 'done') ? status : 'pending';
-    setActiveFilter(filter);
+    setActiveFilter(focusFilter ?? 'pending');
     setTimeout(() => {
       focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
-  }, [focusBookingId, bookings]);
+  }, [focusBookingId, focusFilter]);
 
   const cancelBooking = async (id: number) => {
     await bookingsApi.updateStatus(session.session_token, id, 'cancelled');
