@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Услуги мастера 1",
+      "method": "GET",
+      "path": "/?master_id=1",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "type_array"
+    }
+  ]
+}

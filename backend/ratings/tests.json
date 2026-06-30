@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Оценки клиента 4",
+      "method": "GET",
+      "path": "/?target_user_id=4&from_role=master",
+      "expectedStatus": 200,
+      "expectedBody": { "avg": 0, "reviews": [] },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
