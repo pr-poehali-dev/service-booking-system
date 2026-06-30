@@ -16,6 +16,7 @@ import {
 import AuthScreen from '@/components/AuthScreen';
 import SlotCalendar from '@/components/SlotCalendar';
 import PhotoUpload from '@/components/PhotoUpload';
+import AdminPanel from '@/components/AdminPanel';
 
 // ─── Типы ────────────────────────────────────────────────────────────────────
 interface Master {
@@ -42,12 +43,16 @@ interface Booking {
 }
 
 const MAX_SLOTS_PER_MASTER = 2;
-type Tab = 'home' | 'schedule' | 'master' | 'bookings';
+type Tab = 'home' | 'schedule' | 'master' | 'bookings' | 'admin';
 const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: 'home',     label: 'Каталог', icon: 'LayoutGrid' },
   { id: 'schedule', label: 'Запись',  icon: 'CalendarDays' },
   { id: 'master',   label: 'Кабинет', icon: 'Briefcase' },
   { id: 'bookings', label: 'Мои',     icon: 'Heart' },
+];
+const NAV_ADMIN: { id: Tab; label: string; icon: string }[] = [
+  ...NAV,
+  { id: 'admin', label: 'Админ', icon: 'ShieldCheck' },
 ];
 
 function svcPhotos(s: Service) {
@@ -353,24 +358,29 @@ function Schedule({ session, focusMaster }: { session: UserSession; focusMaster:
   const [sending, setSending] = useState(false);
   const [svcFilter, setSvcFilter] = useState('');
 
+  const loadServices = useCallback(async () => {
+    const data = await mastersApi.list();
+    if (!Array.isArray(data)) { setLoading(false); return; }
+    const list: Master[] = (focusMaster
+      ? data.filter((m: Master) => m.id === focusMaster.id)
+      : data
+    ).filter((m: Master) => m.user_id !== session.id);
+    const svList: { master: Master; service: Service }[] = [];
+    await Promise.all(list.map(async m => {
+      const svs = await servicesApi.list(m.id);
+      if (Array.isArray(svs)) svs.forEach((s: Service) => svList.push({ master: m, service: s }));
+    }));
+    setServices(svList);
+    setLoading(false);
+  }, [focusMaster, session.id]);
+
   useEffect(() => {
     setLoading(true);
-    mastersApi.list().then(async data => {
-      if (!Array.isArray(data)) { setLoading(false); return; }
-      // Нельзя записаться к себе — фильтруем свой профиль мастера
-      const list: Master[] = (focusMaster
-        ? data.filter((m: Master) => m.id === focusMaster.id)
-        : data
-      ).filter((m: Master) => m.user_id !== session.id);
-      const svList: { master: Master; service: Service }[] = [];
-      await Promise.all(list.map(async m => {
-        const svs = await servicesApi.list(m.id);
-        if (Array.isArray(svs)) svs.forEach((s: Service) => svList.push({ master: m, service: s }));
-      }));
-      setServices(svList);
-      setLoading(false);
-    });
-  }, [focusMaster]);
+    loadServices();
+    // Polling: обновляем услуги каждые 30 сек
+    const interval = setInterval(loadServices, 30_000);
+    return () => clearInterval(interval);
+  }, [loadServices]);
 
   const handleBook = (m: Master, s: Service) => { setBookingMaster(m); setBookingService(s); };
 
@@ -525,7 +535,16 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     setLoading(false);
   }, [session]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  // Polling: новые брони появляются автоматически каждые 20 сек
+  useEffect(() => {
+    loadAll();
+    if (!session.master_id) return;
+    const interval = setInterval(async () => {
+      const bk = await bookingsApi.list(session.session_token, 'master');
+      if (Array.isArray(bk)) setBookings(bk);
+    }, 20_000);
+    return () => clearInterval(interval);
+  }, [loadAll, session.master_id, session.session_token]);
 
   const updateStatus = async (id: number, status: string) => {
     await bookingsApi.updateStatus(session.session_token, id, status);
@@ -1038,8 +1057,10 @@ function MyBookings({ session }: { session: UserSession }) {
 }
 
 // ─── BottomNav ────────────────────────────────────────────────────────────────
-function BottomNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const nav = NAV; // Кабинет виден всем — там предложение стать мастером
+function BottomNav({ active, onChange, isAdmin }: {
+  active: Tab; onChange: (t: Tab) => void; isAdmin?: boolean;
+}) {
+  const nav = isAdmin ? NAV_ADMIN : NAV;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-2xl items-stretch justify-around">
@@ -1102,9 +1123,11 @@ const Index = () => {
           <MasterCabinet session={session} setSession={s => { setSession(s); saveSession(s); }} />
         )}
         {tab === 'bookings' && <MyBookings session={session} />}
+        {tab === 'admin' && session.is_admin && <AdminPanel session={session} />}
       </main>
       <BottomNav
         active={tab}
+        isAdmin={!!session.is_admin}
         onChange={t => { if (t !== 'schedule') setScheduleMaster(null); setTab(t); }}
       />
     </div>

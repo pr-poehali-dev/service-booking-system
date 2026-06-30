@@ -5,6 +5,7 @@ const URLS = {
   ratings:  'https://functions.poehali.dev/5ec6be20-e414-43ba-8bed-413ecff8aeaf',
   services: 'https://functions.poehali.dev/e82f29da-cb72-405a-bb0e-49d14495fe2a',
   upload:   'https://functions.poehali.dev/a26c9112-2983-4971-a812-01169def416c',
+  admin:    'https://functions.poehali.dev/8649296a-7d9c-4030-ac90-1157baff0c63',
 };
 
 async function req(url: string, opts: RequestInit = {}) {
@@ -134,6 +135,36 @@ export async function uploadPhoto(
   });
 }
 
+// ── Admin ─────────────────────────────────────────────────────────────────────
+export const adminApi = {
+  list: (token: string) =>
+    req(URLS.admin, { headers: { 'X-Session-Token': token } }),
+
+  blockMaster: (token: string, master_id: number, blocked: boolean) =>
+    req(`${URLS.admin}?action=block_master`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+      body: JSON.stringify({ master_id, blocked }),
+    }),
+
+  deleteMaster: (token: string, master_id: number) =>
+    req(`${URLS.admin}?action=delete_master`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+      body: JSON.stringify({ master_id }),
+    }),
+
+  blockService: (token: string, service_id: number, blocked: boolean) =>
+    req(`${URLS.admin}?action=block_service`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+      body: JSON.stringify({ service_id, blocked }),
+    }),
+
+  deleteService: (token: string, service_id: number) =>
+    req(`${URLS.admin}?action=delete_service`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+      body: JSON.stringify({ service_id }),
+    }),
+};
+
 // ── Session helpers ────────────────────────────────────────────────────────────
 export const SESSION_KEY = 'lepestok_session';
 
@@ -155,6 +186,7 @@ export interface UserSession {
   name: string;
   email: string;
   is_master: boolean;
+  is_admin?: boolean;
   master_id: number | null;
   address: string | null;
   session_token: string;

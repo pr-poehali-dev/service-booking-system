@@ -53,7 +53,8 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"""
                 SELECT id, title, description, price_type, price::float, is_active,
                        photo1_url, photo2_url, photo3_url
-                FROM {S}.services WHERE master_id=%s AND is_active=TRUE ORDER BY id
+                FROM {S}.services
+                WHERE master_id=%s AND is_active=TRUE AND is_blocked=FALSE ORDER BY id
             """, (master_id,))
             cols = ["id","title","description","price_type","price","is_active",
                     "photo1_url","photo2_url","photo3_url"]

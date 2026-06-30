@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS admin",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": "",
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET без токена — 403",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "forbidden"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

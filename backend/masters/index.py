@@ -154,7 +154,8 @@ def handler(event: dict, context) -> dict:
                 cur.execute(f"""
                     SELECT id, title, description, price_type, price::float,
                            photo1_url, photo2_url, photo3_url
-                    FROM {S}.services WHERE master_id=%s AND is_active=TRUE ORDER BY id
+                    FROM {S}.services
+                    WHERE master_id=%s AND is_active=TRUE AND is_blocked=FALSE ORDER BY id
                 """, (master_id,))
                 master["services"] = [
                     dict(zip(["id","title","description","price_type","price",
@@ -173,7 +174,8 @@ def handler(event: dict, context) -> dict:
                     JOIN {S}.users u ON u.id=m.user_id
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
-                    LEFT JOIN {S}.services s ON s.master_id=m.id AND s.is_active=TRUE
+                    LEFT JOIN {S}.services s ON s.master_id=m.id AND s.is_active=TRUE AND s.is_blocked=FALSE
+                    WHERE m.is_blocked=FALSE
                     GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url
                     ORDER BY rating DESC
                 """)

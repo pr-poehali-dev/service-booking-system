@@ -64,7 +64,7 @@ def send_email(to_email: str, code: str) -> bool:
 
 def get_user_row(cur, token):
     cur.execute(f"""
-        SELECT u.id, u.name, u.email, u.is_master, m.id AS master_id, m.address
+        SELECT u.id, u.name, u.email, u.is_master, m.id AS master_id, m.address, u.is_admin
         FROM {S}.users u
         LEFT JOIN {S}.masters m ON m.user_id = u.id
         WHERE u.session_token = %s
@@ -92,7 +92,7 @@ def handler(event: dict, context) -> dict:
             row = get_user_row(cur, token)
             if not row:
                 return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "invalid token"})}
-            cols = ["id", "name", "email", "is_master", "master_id", "address"]
+            cols = ["id", "name", "email", "is_master", "master_id", "address", "is_admin"]
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(dict(zip(cols, row)))}
 
         # ── POST ?action=send — отправить код ──────────────────────────────────
@@ -157,7 +157,7 @@ def handler(event: dict, context) -> dict:
             row = get_user_row(cur, token)
             if not row:
                 return {"statusCode": 500, "headers": CORS, "body": json.dumps({"error": "user not found after verify"})}
-            cols = ["id", "name", "email", "is_master", "master_id", "address"]
+            cols = ["id", "name", "email", "is_master", "master_id", "address", "is_admin"]
             user = dict(zip(cols, row))
             user["session_token"] = token
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(user)}

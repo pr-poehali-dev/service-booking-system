@@ -1,0 +1,159 @@
+"""
+Панель администратора.
+GET  /                        — список мастеров со статусами и их услугами
+POST /?action=block_master    — заблокировать/разблокировать мастера   body: {master_id, blocked}
+POST /?action=delete_master   — удалить мастера и всё связанное         body: {master_id}
+POST /?action=block_service   — заблокировать/разблокировать услугу     body: {service_id, blocked}
+POST /?action=delete_service  — удалить услугу и все её брони           body: {service_id}
+"""
+import json, os
+import psycopg2
+
+S = "t_p84631928_service_booking_syst"
+ADMIN_EMAIL = "bouh.cbeta@gmail.com"
+CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Session-Token",
+}
+
+
+def get_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def get_token(event):
+    h = event.get("headers") or {}
+    return h.get("x-session-token") or h.get("X-Session-Token")
+
+
+def resolve_admin(cur, token):
+    if not token:
+        return False
+    cur.execute(f"SELECT is_admin FROM {S}.users WHERE session_token=%s", (token,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def handler(event: dict, context) -> dict:
+    if event.get("httpMethod") == "OPTIONS":
+        return {"statusCode": 200, "headers": CORS, "body": ""}
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    try:
+        token = get_token(event)
+        if not resolve_admin(cur, token):
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+
+        method = event.get("httpMethod", "GET")
+        params = event.get("queryStringParameters") or {}
+        action = params.get("action", "")
+
+        # ── GET — список мастеров с услугами ──────────────────────────────────
+        if method == "GET":
+            cur.execute(f"""
+                SELECT m.id, u.name, u.email, m.is_blocked,
+                       COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
+                       COUNT(DISTINCT b.id) AS booking_count
+                FROM {S}.masters m
+                JOIN {S}.users u ON u.id = m.user_id
+                LEFT JOIN {S}.bookings b ON b.master_id = m.id
+                LEFT JOIN {S}.bookings bd ON bd.master_id = m.id AND bd.status = 'done'
+                LEFT JOIN {S}.ratings r ON r.booking_id = bd.id AND r.from_role = 'client'
+                GROUP BY m.id, u.name, u.email, m.is_blocked
+                ORDER BY m.id
+            """)
+            masters = []
+            for row in cur.fetchall():
+                mid, name, email, is_blocked, rating, booking_count = row
+                cur.execute(f"""
+                    SELECT id, title, is_active, is_blocked,
+                           (SELECT COUNT(*) FROM {S}.bookings WHERE service_id=s.id) AS booking_count
+                    FROM {S}.services s
+                    WHERE master_id=%s ORDER BY id
+                """, (mid,))
+                services = [
+                    {"id": r[0], "title": r[1], "is_active": r[2],
+                     "is_blocked": r[3], "booking_count": r[4]}
+                    for r in cur.fetchall()
+                ]
+                masters.append({
+                    "id": mid, "name": name, "email": email,
+                    "is_blocked": is_blocked, "rating": float(rating),
+                    "booking_count": booking_count, "services": services,
+                })
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps(masters)}
+
+        if method == "POST":
+            body = json.loads(event.get("body") or "{}")
+
+            # ── Блокировка мастера ─────────────────────────────────────────────
+            if action == "block_master":
+                master_id = int(body["master_id"])
+                blocked = bool(body.get("blocked", True))
+                cur.execute(f"UPDATE {S}.masters SET is_blocked=%s WHERE id=%s", (blocked, master_id))
+                if blocked:
+                    # Отклоняем все pending/confirmed брони этого мастера
+                    cur.execute(f"""
+                        UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
+                        WHERE master_id=%s AND status IN ('pending','confirmed')
+                    """, (master_id,))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+            # ── Удаление мастера ───────────────────────────────────────────────
+            if action == "delete_master":
+                master_id = int(body["master_id"])
+                # Удаляем каскадно: оценки → брони → услуги → мастер → (пользователь остаётся)
+                cur.execute(f"""
+                    DELETE FROM {S}.ratings
+                    WHERE booking_id IN (
+                        SELECT id FROM {S}.bookings WHERE master_id=%s
+                    )
+                """, (master_id,))
+                cur.execute(f"DELETE FROM {S}.bookings WHERE master_id=%s", (master_id,))
+                cur.execute(f"DELETE FROM {S}.slots WHERE master_id=%s", (master_id,))
+                cur.execute(f"DELETE FROM {S}.services WHERE master_id=%s", (master_id,))
+                # Сбрасываем флаг мастера у пользователя
+                cur.execute(f"""
+                    UPDATE {S}.users SET is_master=FALSE
+                    WHERE id=(SELECT user_id FROM {S}.masters WHERE id=%s)
+                """, (master_id,))
+                cur.execute(f"DELETE FROM {S}.masters WHERE id=%s", (master_id,))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+            # ── Блокировка услуги ──────────────────────────────────────────────
+            if action == "block_service":
+                service_id = int(body["service_id"])
+                blocked = bool(body.get("blocked", True))
+                cur.execute(f"UPDATE {S}.services SET is_blocked=%s WHERE id=%s", (blocked, service_id))
+                if blocked:
+                    # Автоматически отклоняем все активные брони на эту услугу
+                    cur.execute(f"""
+                        UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
+                        WHERE service_id=%s AND status IN ('pending','confirmed')
+                    """, (service_id,))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+            # ── Удаление услуги ────────────────────────────────────────────────
+            if action == "delete_service":
+                service_id = int(body["service_id"])
+                cur.execute(f"""
+                    DELETE FROM {S}.ratings
+                    WHERE booking_id IN (
+                        SELECT id FROM {S}.bookings WHERE service_id=%s
+                    )
+                """, (service_id,))
+                cur.execute(f"DELETE FROM {S}.bookings WHERE service_id=%s", (service_id,))
+                cur.execute(f"UPDATE {S}.services SET is_active=FALSE, is_blocked=TRUE WHERE id=%s", (service_id,))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+        return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "unknown action"})}
+
+    finally:
+        conn.close()
