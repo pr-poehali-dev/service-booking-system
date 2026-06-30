@@ -619,6 +619,11 @@ export function MyBookings({ session }: { session: UserSession }) {
             Отменить запрос
           </Button>
         )}
+        {b.status === 'confirmed' && new Date(b.slot_start) > new Date() && (
+          <Button size="sm" variant="outline" className="mt-2 h-8 w-full rounded-xl text-destructive hover:text-destructive" onClick={() => cancelBooking(b.id)}>
+            <Icon name="X" size={14} className="mr-1" /> Отменить запись
+          </Button>
+        )}
         {b.status === 'done' && (
           <div className="mt-3 rounded-xl bg-secondary/50 p-3">
             {ratingMap[b.id] ? (
