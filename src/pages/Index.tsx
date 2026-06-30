@@ -1010,7 +1010,17 @@ const Index = () => {
 
   useEffect(() => {
     const stored = loadSession();
-    if (stored) setSession(stored);
+    if (stored) {
+      setSession(stored);
+      // Обновляем сессию с сервера чтобы подтянуть актуальный master_id
+      authApi.me(stored.session_token).then(fresh => {
+        if (fresh?.id) {
+          const updated = { ...stored, ...fresh, session_token: stored.session_token };
+          setSession(updated);
+          saveSession(updated);
+        }
+      });
+    }
     setBooting(false);
   }, []);
 
