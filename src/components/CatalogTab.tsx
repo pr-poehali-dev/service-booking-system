@@ -127,10 +127,18 @@ export function ServiceCard({ master, service, onBook }: {
               ? <Avatar className="h-10 w-10"><AvatarImage src={master.photo_url} /></Avatar>
               : <Avatar className="h-10 w-10"><AvatarFallback>{master.name[0]}</AvatarFallback></Avatar>
             }
-            <div>
-              <p className="font-semibold text-sm">{master.name}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm">{master.name}</p>
+                {master.rating > 0 && (
+                  <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
+                    <Icon name="Star" size={11} className="fill-primary text-primary" />
+                    {master.rating}
+                  </span>
+                )}
+              </div>
               {master.address && (
-                <p className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                <p className="flex items-center gap-0.5 text-xs text-muted-foreground truncate">
                   <Icon name="MapPin" size={11} />{master.address}
                 </p>
               )}
