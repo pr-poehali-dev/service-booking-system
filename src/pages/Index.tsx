@@ -147,10 +147,15 @@ function MasterSheet({ master, onBook, children }: {
   );
 }
 
+const ADDR_FILTER_KEY = 'lepestok_addr_filter';
+
 // ─── Каталог ─────────────────────────────────────────────────────────────────
 function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
   const [masters, setMasters] = useState<Master[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addrFilter, setAddrFilter] = useState<string>(
+    () => localStorage.getItem(ADDR_FILTER_KEY) ?? ''
+  );
 
   useEffect(() => {
     mastersApi.list().then(data => {
@@ -158,6 +163,15 @@ function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
       setLoading(false);
     });
   }, []);
+
+  const handleAddrChange = (v: string) => {
+    setAddrFilter(v);
+    localStorage.setItem(ADDR_FILTER_KEY, v);
+  };
+
+  const filtered = addrFilter.trim()
+    ? masters.filter(m => m.address?.toLowerCase().includes(addrFilter.toLowerCase()))
+    : masters;
 
   return (
     <div className="space-y-5 px-4 pb-6 pt-5">
@@ -173,7 +187,23 @@ function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
         </p>
       </div>
 
-      <h2 className="font-display text-lg font-bold">Мастера</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="font-display text-lg font-bold">Мастера</h2>
+        <div className="relative flex flex-1 items-center">
+          <input
+            value={addrFilter}
+            onChange={e => handleAddrChange(e.target.value)}
+            placeholder="Адрес"
+            className="h-8 w-full rounded-xl border border-border bg-secondary/50 pl-3 pr-8 text-sm outline-none focus:ring-1 focus:ring-primary"
+          />
+          {addrFilter && (
+            <button onClick={() => handleAddrChange('')}
+              className="absolute right-2 text-muted-foreground hover:text-foreground">
+              <Icon name="X" size={14} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {loading ? (
         <div className="space-y-3">
@@ -186,9 +216,11 @@ function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
             </Card>
           ))}
         </div>
+      ) : filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Мастера по адресу не найдены</p>
       ) : (
         <div className="space-y-3">
-          {masters.map((m, i) => (
+          {filtered.map((m, i) => (
             <MasterSheet key={m.id} master={m} onBook={onSchedule}>
               <Card
                 className="flex animate-fade-up cursor-pointer items-center gap-3 overflow-hidden border-border p-3 transition-transform active:scale-[0.98]"
@@ -240,16 +272,20 @@ function ServiceCard({ master, service, onBook }: {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Card className="cursor-pointer overflow-hidden border-border transition-transform active:scale-[0.98]">
-          {cardImg && (
-            <img src={cardImg} alt={service.title} className="aspect-[16/9] w-full object-cover" />
+        <Card className="flex cursor-pointer overflow-hidden border-border transition-transform active:scale-[0.98]">
+          {cardImg ? (
+            <img src={cardImg} alt={service.title} className="h-24 w-24 shrink-0 object-cover" />
+          ) : (
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center bg-secondary">
+              <Icon name="Scissors" size={24} className="text-muted-foreground" />
+            </div>
           )}
-          <div className="p-3">
+          <div className="min-w-0 flex-1 p-3">
             <div className="flex items-start justify-between gap-2">
-              <p className="truncate text-sm font-semibold">{service.title}</p>
+              <p className="text-sm font-semibold leading-snug">{service.title}</p>
               <span className="shrink-0 font-mono-tnum text-sm font-bold text-primary">{fmtPrice(service)}</span>
             </div>
-            <p className="text-xs text-muted-foreground">{master.name}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{master.name}</p>
             {service.description && (
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description}</p>
             )}
@@ -315,6 +351,7 @@ function Schedule({ session, focusMaster }: { session: UserSession; focusMaster:
   const [bookingService, setBookingService] = useState<Service | null>(null);
   const [pickedSlots, setPickedSlots] = useState<Record<number, number[]>>({});
   const [sending, setSending] = useState(false);
+  const [svcFilter, setSvcFilter] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -414,19 +451,38 @@ function Schedule({ session, focusMaster }: { session: UserSession; focusMaster:
     );
   }
 
+  const filteredSvcs = svcFilter.trim()
+    ? services.filter(({ service }) => service.title.toLowerCase().includes(svcFilter.toLowerCase()))
+    : services;
+
   return (
     <div className="px-4 pb-6 pt-5">
-      <h2 className="mb-1 font-display text-lg font-bold">Выбрать услугу</h2>
-      <p className="mb-4 text-sm text-muted-foreground">Нажмите на карточку для подробностей и записи</p>
+      <h2 className="mb-3 font-display text-lg font-bold">Выбрать услугу</h2>
+      <div className="relative mb-4 flex items-center">
+        <input
+          value={svcFilter}
+          onChange={e => setSvcFilter(e.target.value)}
+          placeholder="Поиск по названию услуги"
+          className="h-9 w-full rounded-xl border border-border bg-secondary/50 pl-3 pr-8 text-sm outline-none focus:ring-1 focus:ring-primary"
+        />
+        {svcFilter && (
+          <button onClick={() => setSvcFilter('')}
+            className="absolute right-2 text-muted-foreground hover:text-foreground">
+            <Icon name="X" size={14} />
+          </button>
+        )}
+      </div>
       {loading ? (
-        <div className="grid grid-cols-2 gap-3">
-          {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-[3/4] w-full rounded-2xl" />)}
+        <div className="space-y-3">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
         </div>
-      ) : services.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Нет доступных услуг</p>
+      ) : filteredSvcs.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {svcFilter ? 'Услуги не найдены' : 'Нет доступных услуг'}
+        </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {services.map(({ master, service }) => (
+        <div className="space-y-3">
+          {filteredSvcs.map(({ master, service }) => (
             <ServiceCard key={`${master.id}-${service.id}`} master={master} service={service} onBook={handleBook} />
           ))}
         </div>
