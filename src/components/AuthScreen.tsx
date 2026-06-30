@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { authApi, saveSession, UserSession } from '@/lib/api';
+import { authApi, saveSession, type UserSession } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface Props {
@@ -10,30 +10,18 @@ interface Props {
 }
 
 export default function AuthScreen({ onLogin }: Props) {
-  const [step, setStep] = useState<'phone' | 'name' | 'otp'>('phone');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<'email' | 'name' | 'otp'>('email');
+  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'client' | 'master'>('client');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
 
-  const formatPhone = (v: string) => {
-    const digits = v.replace(/\D/g, '').slice(0, 11);
-    if (!digits) return '';
-    let r = '+7';
-    if (digits.length > 1) r += ' (' + digits.slice(1, 4);
-    if (digits.length >= 4) r += ') ' + digits.slice(4, 7);
-    if (digits.length >= 7) r += '-' + digits.slice(7, 9);
-    if (digits.length >= 9) r += '-' + digits.slice(9, 11);
-    return r;
-  };
-
-  const rawPhone = () => '+7' + phone.replace(/\D/g, '').slice(1);
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   const sendCode = async (withName?: string) => {
     setLoading(true);
-    const res = await authApi.sendOtp(rawPhone(), withName || name || undefined, role);
+    const res = await authApi.sendOtp(email.trim().toLowerCase(), withName || name || undefined);
     setLoading(false);
 
     if (res?.error === 'new_user') {
@@ -43,7 +31,7 @@ export default function AuthScreen({ onLogin }: Props) {
     if (res?.ok) {
       if (res.dev_code) setDevCode(res.dev_code);
       setStep('otp');
-      toast.success('Код отправлен на ваш номер');
+      toast.success('Код отправлен на вашу почту');
     } else {
       toast.error(res?.error || 'Ошибка отправки');
     }
@@ -51,13 +39,17 @@ export default function AuthScreen({ onLogin }: Props) {
 
   const verify = async () => {
     setLoading(true);
-    const res = await authApi.verifyOtp(rawPhone(), code.trim());
+    const res = await authApi.verifyOtp(email.trim().toLowerCase(), code.trim());
     setLoading(false);
     if (res?.session_token) {
       const session: UserSession = {
-        id: res.id, name: res.name, phone: res.phone,
-        role: res.role, master_id: res.master_id,
-        address: res.address, session_token: res.session_token,
+        id: res.id,
+        name: res.name,
+        email: res.email,
+        is_master: res.is_master ?? false,
+        master_id: res.master_id ?? null,
+        address: res.address ?? null,
+        session_token: res.session_token,
       };
       saveSession(session);
       onLogin(session);
@@ -69,91 +61,129 @@ export default function AuthScreen({ onLogin }: Props) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
+        {/* Логотип */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
-            <Icon name="Sparkles" size={28} />
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg">
+            <Icon name="Sparkles" size={32} />
           </div>
           <h1 className="font-display text-2xl font-bold">Лепесток</h1>
           <p className="text-center text-sm text-muted-foreground">Бронирование услуг красоты</p>
         </div>
 
         <Card className="border-border p-6 shadow-sm">
-          {step === 'phone' && (
-            <>
-              <h2 className="mb-1 font-display text-lg font-semibold">Войти или зарегистрироваться</h2>
-              <p className="mb-5 text-sm text-muted-foreground">Введите номер телефона — отправим код</p>
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(formatPhone(e.target.value))}
-                placeholder="+7 (___) ___-__-__"
-                className="mb-4 w-full rounded-xl border border-border bg-secondary/40 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary"
-              />
-              <div className="mb-5 flex gap-2">
-                {(['client', 'master'] as const).map(r => (
-                  <button key={r} onClick={() => setRole(r)}
-                    className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-                      role === r ? 'bg-primary text-primary-foreground' : 'bg-secondary/60 text-secondary-foreground'
-                    }`}>
-                    {r === 'client' ? '👤 Я клиент' : '💅 Я мастер'}
-                  </button>
-                ))}
+
+          {/* ШАГ 1 — Email */}
+          {step === 'email' && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="font-display text-lg font-semibold">Войти или зарегистрироваться</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Введите email — отправим код подтверждения</p>
               </div>
-              <Button className="h-12 w-full rounded-xl text-base" disabled={loading || phone.replace(/\D/g,'').length < 11} onClick={() => sendCode()}>
+              <input
+                type="email"
+                autoFocus
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && isValidEmail(email) && sendCode()}
+                placeholder="your@email.com"
+                className="w-full rounded-xl border border-border bg-secondary/40 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary"
+              />
+              <Button
+                className="h-12 w-full rounded-xl text-base"
+                disabled={loading || !isValidEmail(email)}
+                onClick={() => sendCode()}
+              >
                 {loading ? 'Отправляем...' : 'Получить код'}
+                <Icon name="Mail" size={17} className="ml-2" />
               </Button>
-            </>
+            </div>
           )}
 
+          {/* ШАГ 2 — Имя (только для новых пользователей) */}
           {step === 'name' && (
-            <>
-              <button onClick={() => setStep('phone')} className="mb-4 flex items-center gap-1 text-sm text-muted-foreground">
+            <div className="space-y-4">
+              <button
+                onClick={() => setStep('email')}
+                className="flex items-center gap-1 text-sm text-muted-foreground"
+              >
                 <Icon name="ChevronLeft" size={16} /> Назад
               </button>
-              <h2 className="mb-1 font-display text-lg font-semibold">Как вас зовут?</h2>
-              <p className="mb-5 text-sm text-muted-foreground">Вы новый пользователь — введите ваше имя</p>
+              <div>
+                <h2 className="font-display text-lg font-semibold">Добро пожаловать!</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Вы регистрируетесь впервые — введите ваше имя</p>
+              </div>
               <input
                 autoFocus
                 value={name}
                 onChange={e => setName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && name.trim() && sendCode(name)}
                 placeholder="Имя и фамилия"
-                className="mb-4 w-full rounded-xl border border-border bg-secondary/40 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-xl border border-border bg-secondary/40 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-primary"
               />
-              <Button className="h-12 w-full rounded-xl text-base" disabled={loading || !name.trim()} onClick={() => sendCode(name)}>
+              <Button
+                className="h-12 w-full rounded-xl text-base"
+                disabled={loading || !name.trim()}
+                onClick={() => sendCode(name)}
+              >
                 {loading ? 'Отправляем...' : 'Продолжить'}
               </Button>
-            </>
+            </div>
           )}
 
+          {/* ШАГ 3 — OTP-код */}
           {step === 'otp' && (
-            <>
-              <button onClick={() => setStep('phone')} className="mb-4 flex items-center gap-1 text-sm text-muted-foreground">
+            <div className="space-y-4">
+              <button
+                onClick={() => { setStep('email'); setCode(''); setDevCode(null); }}
+                className="flex items-center gap-1 text-sm text-muted-foreground"
+              >
                 <Icon name="ChevronLeft" size={16} /> Назад
               </button>
-              <h2 className="mb-1 font-display text-lg font-semibold">Введите код</h2>
-              <p className="mb-5 text-sm text-muted-foreground">Отправили 4-значный код на {phone}</p>
+              <div>
+                <h2 className="font-display text-lg font-semibold">Введите код</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Отправили 4-значный код на <span className="font-medium text-foreground">{email}</span>
+                </p>
+              </div>
+
               {devCode && (
-                <div className="mb-4 rounded-xl bg-accent/20 px-4 py-2 text-center text-sm text-accent-foreground">
-                  Тестовый код: <strong className="font-mono-tnum">{devCode}</strong>
+                <div className="rounded-xl bg-accent/20 px-4 py-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Тестовый режим — код:</p>
+                  <p className="font-mono-tnum text-2xl font-bold tracking-widest text-primary">{devCode}</p>
                 </div>
               )}
+
               <input
                 autoFocus
                 type="number"
                 value={code}
                 onChange={e => setCode(e.target.value.slice(0, 4))}
+                onKeyDown={e => e.key === 'Enter' && code.length === 4 && verify()}
                 placeholder="• • • •"
-                className="mb-4 w-full rounded-xl border border-border bg-secondary/40 px-4 py-4 text-center text-2xl font-mono-tnum tracking-[0.5em] outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-xl border border-border bg-secondary/40 px-4 py-4 text-center text-3xl font-mono-tnum tracking-[0.5em] outline-none focus:ring-2 focus:ring-primary"
               />
-              <Button className="h-12 w-full rounded-xl text-base" disabled={loading || code.length < 4} onClick={verify}>
+
+              <Button
+                className="h-12 w-full rounded-xl text-base"
+                disabled={loading || code.length < 4}
+                onClick={verify}
+              >
                 {loading ? 'Проверяем...' : 'Войти'}
               </Button>
-              <button className="mt-3 w-full text-center text-sm text-muted-foreground" onClick={() => sendCode()}>
+
+              <button
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => sendCode()}
+              >
                 Отправить код ещё раз
               </button>
-            </>
+            </div>
           )}
         </Card>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Входя, вы принимаете условия использования сервиса
+        </p>
       </div>
     </div>
   );

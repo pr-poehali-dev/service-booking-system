@@ -32,7 +32,7 @@ def resolve_master(cur, token):
         return None
     cur.execute(
         f"SELECT u.id, m.id FROM {S}.users u JOIN {S}.masters m ON m.user_id=u.id "
-        f"WHERE u.session_token=%s AND u.role='master'",
+        f"WHERE u.session_token=%s AND u.is_master=TRUE",
         (token,)
     )
     return cur.fetchone()

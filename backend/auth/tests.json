@@ -6,7 +6,7 @@
       "path": "/",
       "headers": { "X-Session-Token": "token-client-1" },
       "expectedStatus": 200,
-      "expectedBody": { "role": "client" },
+      "expectedBody": { "email": "ivan@lepestok.demo" },
       "bodyMatcher": "partial"
     }
   ]

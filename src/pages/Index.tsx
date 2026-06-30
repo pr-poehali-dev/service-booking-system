@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import {
-  mastersApi, servicesApi, bookingsApi, ratingsApi,
+  mastersApi, servicesApi, bookingsApi, ratingsApi, authApi,
   loadSession, saveSession, clearSession,
   type UserSession,
 } from '@/lib/api';
@@ -79,7 +79,10 @@ function TopBar({ session, onLogout }: { session: UserSession; onLogout: () => v
           <span className="font-display text-base font-bold tracking-tight">Лепесток</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden text-sm text-muted-foreground sm:block">{session.name}</span>
+          <div className="hidden flex-col items-end sm:flex">
+            <span className="text-sm font-medium leading-tight">{session.name}</span>
+            <span className="text-xs text-muted-foreground leading-tight">{session.email}</span>
+          </div>
           <button onClick={onLogout} className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary">
             <Icon name="LogOut" size={17} className="text-muted-foreground" />
           </button>
@@ -307,7 +310,11 @@ function Schedule({ session, focusMaster }: { session: UserSession; focusMaster:
     setLoading(true);
     mastersApi.list().then(async data => {
       if (!Array.isArray(data)) { setLoading(false); return; }
-      const list: Master[] = focusMaster ? data.filter((m: Master) => m.id === focusMaster.id) : data;
+      // Нельзя записаться к себе — фильтруем свой профиль мастера
+      const list: Master[] = (focusMaster
+        ? data.filter((m: Master) => m.id === focusMaster.id)
+        : data
+      ).filter((m: Master) => m.user_id !== session.id);
       const svList: { master: Master; service: Service }[] = [];
       await Promise.all(list.map(async m => {
         const svs = await servicesApi.list(m.id);
@@ -429,12 +436,13 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
   const [showAddSvc, setShowAddSvc] = useState(false);
   const [newSvc, setNewSvc] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
   const [activeTab, setActiveTab] = useState<'bookings' | 'services' | 'schedule'>('bookings');
+  const [becomingMaster, setBecomingMaster] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!session.master_id) return;
     setLoading(true);
     const [bk, pr] = await Promise.all([
-      bookingsApi.list(session.session_token),
+      bookingsApi.list(session.session_token, 'master'),
       mastersApi.get(session.master_id),
     ]);
     if (Array.isArray(bk)) setBookings(bk);
@@ -485,11 +493,37 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     loadAll();
   };
 
+  const becomeMaster = async () => {
+    setBecomingMaster(true);
+    const res = await authApi.becomeMaster(session.session_token);
+    setBecomingMaster(false);
+    if (res?.master_id) {
+      const updated = { ...session, is_master: true, master_id: res.master_id };
+      setSession(updated);
+      saveSession(updated);
+      toast.success('Профиль мастера создан!');
+    } else {
+      toast.error(res?.error || 'Ошибка');
+    }
+  };
+
   if (!session.master_id) {
     return (
-      <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
-        <Icon name="Briefcase" size={40} className="mb-3 text-muted-foreground" />
-        <p className="text-muted-foreground">Кабинет доступен только для мастеров</p>
+      <div className="flex flex-col items-center justify-center px-4 py-20 text-center gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-secondary">
+          <Icon name="Briefcase" size={32} className="text-primary" />
+        </div>
+        <div>
+          <h2 className="font-display text-xl font-bold">Хотите принимать клиентов?</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Откройте кабинет мастера — добавляйте услуги, управляйте расписанием и принимайте записи.
+          </p>
+        </div>
+        <Button className="h-12 w-full max-w-xs rounded-2xl" disabled={becomingMaster} onClick={becomeMaster}>
+          {becomingMaster ? 'Создаём профиль...' : 'Стать мастером'}
+          <Icon name="Sparkles" size={17} className="ml-2" />
+        </Button>
+        <p className="text-xs text-muted-foreground">Вы по-прежнему сможете записываться к другим мастерам</p>
       </div>
     );
   }
@@ -685,7 +719,7 @@ function MyBookings({ session }: { session: UserSession }) {
   const [ratingMap, setRatingMap] = useState<Record<number, number>>({});
 
   useEffect(() => {
-    bookingsApi.list(session.session_token).then(data => {
+    bookingsApi.list(session.session_token, 'client').then(data => {
       if (Array.isArray(data)) setBookings(data);
       setLoading(false);
     });
@@ -813,8 +847,8 @@ function MyBookings({ session }: { session: UserSession }) {
 }
 
 // ─── BottomNav ────────────────────────────────────────────────────────────────
-function BottomNav({ active, onChange, isMaster }: { active: Tab; onChange: (t: Tab) => void; isMaster: boolean }) {
-  const nav = NAV.filter(n => isMaster || n.id !== 'master');
+function BottomNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const nav = NAV; // Кабинет виден всем — там предложение стать мастером
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-2xl items-stretch justify-around">
@@ -847,7 +881,7 @@ const Index = () => {
 
   const handleLogin = (s: UserSession) => {
     setSession(s);
-    setTab(s.role === 'master' ? 'master' : 'home');
+    setTab(s.is_master ? 'master' : 'home');
   };
 
   const handleLogout = () => { clearSession(); setSession(null); setTab('home'); };
@@ -857,22 +891,19 @@ const Index = () => {
   if (booting) return <div className="min-h-screen bg-background" />;
   if (!session) return <AuthScreen onLogin={handleLogin} />;
 
-  const isMaster = session.role === 'master';
-
   return (
     <div className="min-h-screen bg-background font-sans">
       <TopBar session={session} onLogout={handleLogout} />
       <main className="mx-auto max-w-2xl pb-16">
         {tab === 'home'     && <Home onSchedule={goSchedule} />}
         {tab === 'schedule' && <Schedule session={session} focusMaster={scheduleMaster} />}
-        {tab === 'master'   && isMaster && (
+        {tab === 'master' && (
           <MasterCabinet session={session} setSession={s => { setSession(s); saveSession(s); }} />
         )}
         {tab === 'bookings' && <MyBookings session={session} />}
       </main>
       <BottomNav
         active={tab}
-        isMaster={isMaster}
         onChange={t => { if (t !== 'schedule') setScheduleMaster(null); setTab(t); }}
       />
     </div>

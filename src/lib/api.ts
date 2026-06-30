@@ -20,16 +20,23 @@ export const authApi = {
   me: (token: string) =>
     req(URLS.auth, { headers: { 'X-Session-Token': token } }),
 
-  sendOtp: (phone: string, name?: string, role?: string) =>
+  sendOtp: (email: string, name?: string) =>
     req(`${URLS.auth}?action=send`, {
       method: 'POST',
-      body: JSON.stringify({ phone, name, role }),
+      body: JSON.stringify({ email, name }),
     }),
 
-  verifyOtp: (phone: string, code: string) =>
+  verifyOtp: (email: string, code: string) =>
     req(`${URLS.auth}?action=verify`, {
       method: 'POST',
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ email, code }),
+    }),
+
+  becomeMaster: (token: string) =>
+    req(`${URLS.auth}?action=become_master`, {
+      method: 'POST',
+      headers: { 'X-Session-Token': token },
+      body: JSON.stringify({}),
     }),
 };
 
@@ -75,7 +82,9 @@ export const servicesApi = {
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 export const bookingsApi = {
-  list: (token: string) => req(URLS.bookings, { headers: { 'X-Session-Token': token } }),
+  // view: 'client' (мои записи) | 'master' (входящие к мастеру)
+  list: (token: string, view: 'client' | 'master' = 'client') =>
+    req(`${URLS.bookings}?view=${view}`, { headers: { 'X-Session-Token': token } }),
 
   create: (token: string, data: { master_id: number; service_id: number; slot_id: number }) =>
     req(URLS.bookings, { method: 'POST', headers: { 'X-Session-Token': token }, body: JSON.stringify(data) }),
@@ -87,12 +96,14 @@ export const bookingsApi = {
       body: JSON.stringify({ status }),
     }),
 
-  expire: () => req(`${URLS.bookings}?action=expire`),
+  expire: (token: string) =>
+    req(`${URLS.bookings}?action=expire`, { headers: { 'X-Session-Token': token } }),
 };
 
 // ── Ratings ───────────────────────────────────────────────────────────────────
 export const ratingsApi = {
-  forClient: (userId: number) => req(`${URLS.ratings}?target_user_id=${userId}&from_role=master`),
+  forClient: (userId: number) =>
+    req(`${URLS.ratings}?target_user_id=${userId}&from_role=master`),
 
   add: (token: string, data: { booking_id: number; score: number; comment?: string }) =>
     req(URLS.ratings, { method: 'POST', headers: { 'X-Session-Token': token }, body: JSON.stringify(data) }),
@@ -117,8 +128,8 @@ export function clearSession() {
 export interface UserSession {
   id: number;
   name: string;
-  phone: string;
-  role: 'client' | 'master';
+  email: string;
+  is_master: boolean;
   master_id: number | null;
   address: string | null;
   session_token: string;
