@@ -11,6 +11,7 @@ interface Slot {
   slot_end: string;
   is_blocked: boolean;
   has_booking: boolean;
+  has_confirmed: boolean;
 }
 
 interface Props {
@@ -169,20 +170,24 @@ export default function SlotCalendar({
 
                 if (readOnly) {
                   if (!slot || slot.is_blocked) return <div key={di} className="h-6 rounded bg-muted/30" />;
-                  const busy = slot.has_booking;
+                  const confirmed = slot.has_confirmed;
+                  const contested = slot.has_booking && !slot.has_confirmed; // pending, но не confirmed
                   const picked = pickedSlotIds.includes(slot.id);
                   return (
                     <button
                       key={di}
-                      disabled={busy || isPast}
+                      disabled={confirmed || isPast}
                       onClick={() => onSlotPick?.(slot)}
                       className={`h-6 rounded text-[10px] font-medium transition-all active:scale-95 ${
                         picked
                           ? 'bg-primary text-primary-foreground'
-                          : busy
-                          ? 'cursor-not-allowed bg-muted opacity-50'
+                          : confirmed
+                          ? 'cursor-not-allowed bg-muted opacity-40'
+                          : contested
+                          ? 'bg-secondary text-muted-foreground hover:bg-secondary/80'
                           : 'bg-success/25 text-success hover:bg-success/40'
                       }`}
+                      title={contested ? 'Есть заявки — слот ещё свободен' : undefined}
                     >
                       {hour}
                     </button>

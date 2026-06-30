@@ -63,7 +63,11 @@ def handler(event: dict, context) -> dict:
                                EXISTS(
                                  SELECT 1 FROM {S}.bookings b
                                  WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')
-                               ) AS has_booking
+                               ) AS has_booking,
+                               EXISTS(
+                                 SELECT 1 FROM {S}.bookings b
+                                 WHERE b.slot_id=s.id AND b.status = 'confirmed'
+                               ) AS has_confirmed
                         FROM {S}.slots s
                         WHERE s.master_id=%s AND s.slot_start::date=%s::date
                         ORDER BY s.slot_start
@@ -74,12 +78,16 @@ def handler(event: dict, context) -> dict:
                                EXISTS(
                                  SELECT 1 FROM {S}.bookings b
                                  WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')
-                               ) AS has_booking
+                               ) AS has_booking,
+                               EXISTS(
+                                 SELECT 1 FROM {S}.bookings b
+                                 WHERE b.slot_id=s.id AND b.status = 'confirmed'
+                               ) AS has_confirmed
                         FROM {S}.slots s
                         WHERE s.master_id=%s AND s.slot_start >= NOW()
                         ORDER BY s.slot_start LIMIT 200
                     """, (master_id,))
-                cols = ["id", "slot_start", "slot_end", "is_blocked", "has_booking"]
+                cols = ["id", "slot_start", "slot_end", "is_blocked", "has_booking", "has_confirmed"]
                 result = []
                 for r in cur.fetchall():
                     row = dict(zip(cols, r))
