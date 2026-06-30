@@ -435,6 +435,8 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
   const [form, setForm] = useState({ name: '', about: '', address: '' });
   const [showAddSvc, setShowAddSvc] = useState(false);
   const [newSvc, setNewSvc] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
+  const [editingSvc, setEditingSvc] = useState<number | null>(null);
+  const [editSvcForm, setEditSvcForm] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
   const [activeTab, setActiveTab] = useState<'bookings' | 'services' | 'schedule'>('bookings');
   const [becomingMaster, setBecomingMaster] = useState(false);
 
@@ -491,6 +493,28 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     await servicesApi.remove(session.session_token, id);
     toast.success('Услуга удалена');
     loadAll();
+  };
+
+  const startEditSvc = (s: Service) => {
+    setEditingSvc(s.id);
+    setEditSvcForm({ title: s.title, description: s.description || '', price: String(s.price), price_type: s.price_type });
+    setShowAddSvc(false);
+  };
+
+  const saveEditSvc = async () => {
+    if (!editingSvc) return;
+    if (!editSvcForm.title || !editSvcForm.price) return toast.error('Введите название и цену');
+    const res = await servicesApi.update(session.session_token, editingSvc, {
+      title: editSvcForm.title,
+      description: editSvcForm.description || null,
+      price_type: editSvcForm.price_type,
+      price: parseFloat(editSvcForm.price),
+    });
+    if (res?.ok) {
+      toast.success('Услуга обновлена');
+      setEditingSvc(null);
+      loadAll();
+    } else toast.error(res?.error || 'Ошибка');
   };
 
   const becomeMaster = async () => {
@@ -689,16 +713,51 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
             <p className="py-4 text-center text-sm text-muted-foreground">Услуг пока нет</p>
           )}
           {services.map(s => (
-            <div key={s.id} className="flex items-start justify-between rounded-2xl border border-border p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{s.title}</p>
-                {s.description && <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>}
-                <p className="font-mono-tnum mt-1 text-xs text-primary">{fmtPrice(s)}</p>
-              </div>
-              <button onClick={() => deleteService(s.id)}
-                className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10">
-                <Icon name="Trash2" size={15} />
-              </button>
+            <div key={s.id} className="rounded-2xl border border-border overflow-hidden">
+              {editingSvc === s.id ? (
+                <div className="space-y-2 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Редактирование</p>
+                  {[
+                    { key: 'title', placeholder: 'Название услуги', type: 'text' },
+                    { key: 'description', placeholder: 'Описание (необязательно)', type: 'text' },
+                    { key: 'price', placeholder: 'Цена (₽)', type: 'number' },
+                  ].map(f => (
+                    <input key={f.key} type={f.type} placeholder={f.placeholder}
+                      value={editSvcForm[f.key as keyof typeof editSvcForm]}
+                      onChange={e => setEditSvcForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  ))}
+                  <select value={editSvcForm.price_type}
+                    onChange={e => setEditSvcForm(p => ({ ...p, price_type: e.target.value }))}
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none">
+                    <option value="fixed">Фиксированная цена</option>
+                    <option value="per_hour">За час</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={saveEditSvc}>Сохранить</Button>
+                    <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => setEditingSvc(null)}>Отмена</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{s.title}</p>
+                    {s.description && <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>}
+                    <p className="font-mono-tnum mt-1 text-xs text-primary">{fmtPrice(s)}</p>
+                  </div>
+                  <div className="ml-2 flex shrink-0 gap-1">
+                    <button onClick={() => startEditSvc(s)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary">
+                      <Icon name="Pencil" size={14} />
+                    </button>
+                    <button onClick={() => deleteService(s.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10">
+                      <Icon name="Trash2" size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
