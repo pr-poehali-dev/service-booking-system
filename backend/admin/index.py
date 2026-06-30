@@ -60,7 +60,7 @@ def handler(event: dict, context) -> dict:
                        COUNT(DISTINCT ru.id) AS ref_count
                 FROM {S}.masters m
                 JOIN {S}.users u ON u.id = m.user_id
-                LEFT JOIN {S}.bookings b ON b.master_id = m.id
+                LEFT JOIN {S}.bookings b ON b.master_id = m.id AND b.status != 'cancelled'
                 LEFT JOIN {S}.bookings bd ON bd.master_id = m.id AND bd.status = 'done'
                 LEFT JOIN {S}.ratings r ON r.booking_id = bd.id AND r.from_role = 'client'
                 LEFT JOIN {S}.users ru ON ru.referred_by = m.id
