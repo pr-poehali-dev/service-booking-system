@@ -3,6 +3,7 @@ export interface Master {
   photo_url: string | null;
   rating: number; review_count: number; service_titles?: string[];
   services?: Service[];
+  ref_code?: string | null;
 }
 
 export interface Service {

@@ -14,7 +14,7 @@ interface AdminService {
 interface AdminMaster {
   id: number; name: string; email: string;
   is_blocked: boolean; rating: number;
-  booking_count: number; services: AdminService[];
+  booking_count: number; ref_count: number; services: AdminService[];
 }
 
 export default function AdminPanel({ session }: { session: UserSession }) {
@@ -86,7 +86,7 @@ export default function AdminPanel({ session }: { session: UserSession }) {
                   </div>
                   <p className="text-xs text-muted-foreground">{m.email}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Брони: {m.booking_count} · Рейтинг: {m.rating > 0 ? m.rating : '—'} · Услуг: {m.services.length}
+                    Брони: {m.booking_count} · Рейтинг: {m.rating > 0 ? m.rating : '—'} · Услуг: {m.services.length} · Рефералов: {m.ref_count}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

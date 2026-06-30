@@ -234,6 +234,27 @@ export function MasterCabinet({ session, setSession }: {
     <div className="px-4 pb-24 pt-5">
       <h2 className="mb-4 font-display text-lg font-bold">Кабинет мастера</h2>
 
+      {profile?.ref_code && (
+        <Card className="mb-4 border-border p-3">
+          <p className="mb-1 text-[11px] text-muted-foreground">Ваша реферальная ссылка</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded-lg bg-secondary px-2 py-1.5 text-[11px] font-mono text-foreground">
+              {`${window.location.origin}?ref=${profile.ref_code}`}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}?ref=${profile!.ref_code}`);
+                toast.success('Ссылка скопирована');
+              }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary hover:bg-primary/10"
+            >
+              <Icon name="Copy" size={14} />
+            </button>
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted-foreground">Поделитесь ссылкой — знакомые зарегистрируются как ваши приглашённые</p>
+        </Card>
+      )}
+
       <div className="mb-4 grid grid-cols-3 gap-2">
         {[['Записей', active.length, 'Calendar'], ['Ждут', pending.length, 'Clock'], ['Готово', done.length, 'BadgeCheck']].map(([l, v, ic], i) => (
           <Card key={i} className="border-border p-3 text-center">

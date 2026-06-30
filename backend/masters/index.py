@@ -145,18 +145,19 @@ def handler(event: dict, context) -> dict:
                     SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
                            m.photo_url,
                            COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
-                           COUNT(DISTINCT r.id) AS review_count
+                           COUNT(DISTINCT r.id) AS review_count,
+                           m.ref_code
                     FROM {S}.masters m
                     JOIN {S}.users u ON u.id=m.user_id
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
                     WHERE m.id=%s
-                    GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url
+                    GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url, m.ref_code
                 """, (master_id,))
                 row = cur.fetchone()
                 if not row:
                     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "not found"})}
-                cols = ["id","user_id","name","about","address","photo_url","rating","review_count"]
+                cols = ["id","user_id","name","about","address","photo_url","rating","review_count","ref_code"]
                 master = dict(zip(cols, row))
                 master["rating"] = float(master["rating"])
                 cur.execute(f"""

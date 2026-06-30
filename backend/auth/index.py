@@ -5,7 +5,7 @@ POST /?action=verify — проверить OTP, вернуть session_token
 POST /?action=become_master — создать профиль мастера для текущего пользователя
 GET  /               — текущий пользователь по X-Session-Token
 """
-import json, os, random, string, uuid, smtplib
+import json, os, random, string, uuid, smtplib, hashlib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
@@ -111,9 +111,16 @@ def handler(event: dict, context) -> dict:
                 if not name:
                     return {"statusCode": 400, "headers": CORS,
                             "body": json.dumps({"error": "new_user", "message": "Введите ваше имя"})}
+                ref_code = (body.get("ref_code") or "").strip().upper() or None
+                referred_by = None
+                if ref_code:
+                    cur.execute(f"SELECT id FROM {S}.masters WHERE ref_code=%s", (ref_code,))
+                    m = cur.fetchone()
+                    if m:
+                        referred_by = m[0]
                 cur.execute(
-                    f"INSERT INTO {S}.users (name, phone, email) VALUES (%s, %s, %s) RETURNING id",
-                    (name, email, email)
+                    f"INSERT INTO {S}.users (name, phone, email, referred_by) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (name, email, email, referred_by)
                 )
                 conn.commit()
 
@@ -175,7 +182,8 @@ def handler(event: dict, context) -> dict:
 
             cur.execute(f"SELECT id FROM {S}.masters WHERE user_id=%s", (user_id,))
             if not cur.fetchone():
-                cur.execute(f"INSERT INTO {S}.masters (user_id) VALUES (%s)", (user_id,))
+                ref_code = hashlib.md5(f"{user_id}lepestok".encode()).hexdigest()[:8].upper()
+                cur.execute(f"INSERT INTO {S}.masters (user_id, ref_code) VALUES (%s, %s)", (user_id, ref_code))
             cur.execute(f"UPDATE {S}.users SET is_master=TRUE WHERE id=%s", (user_id,))
             conn.commit()
 

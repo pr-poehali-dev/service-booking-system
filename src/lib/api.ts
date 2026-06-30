@@ -22,10 +22,10 @@ export const authApi = {
   me: (token: string) =>
     req(URLS.auth, { headers: { 'X-Session-Token': token } }),
 
-  sendOtp: (email: string, name?: string) =>
+  sendOtp: (email: string, name?: string, ref_code?: string) =>
     req(`${URLS.auth}?action=send`, {
       method: 'POST',
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email, name, ref_code }),
     }),
 
   verifyOtp: (email: string, code: string) =>

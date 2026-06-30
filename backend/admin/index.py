@@ -56,18 +56,20 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"""
                 SELECT m.id, u.name, u.email, m.is_blocked,
                        COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
-                       COUNT(DISTINCT b.id) AS booking_count
+                       COUNT(DISTINCT b.id) AS booking_count,
+                       COUNT(DISTINCT ru.id) AS ref_count
                 FROM {S}.masters m
                 JOIN {S}.users u ON u.id = m.user_id
                 LEFT JOIN {S}.bookings b ON b.master_id = m.id
                 LEFT JOIN {S}.bookings bd ON bd.master_id = m.id AND bd.status = 'done'
                 LEFT JOIN {S}.ratings r ON r.booking_id = bd.id AND r.from_role = 'client'
+                LEFT JOIN {S}.users ru ON ru.referred_by = m.id
                 GROUP BY m.id, u.name, u.email, m.is_blocked
                 ORDER BY m.id
             """)
             masters = []
             for row in cur.fetchall():
-                mid, name, email, is_blocked, rating, booking_count = row
+                mid, name, email, is_blocked, rating, booking_count, ref_count = row
                 cur.execute(f"""
                     SELECT id, title, is_active, is_blocked,
                            (SELECT COUNT(*) FROM {S}.bookings WHERE service_id=s.id) AS booking_count
@@ -82,7 +84,8 @@ def handler(event: dict, context) -> dict:
                 masters.append({
                     "id": mid, "name": name, "email": email,
                     "is_blocked": is_blocked, "rating": float(rating),
-                    "booking_count": booking_count, "services": services,
+                    "booking_count": booking_count, "ref_count": ref_count,
+                    "services": services,
                 })
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(masters)}
 

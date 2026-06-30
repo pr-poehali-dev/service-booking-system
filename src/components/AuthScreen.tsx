@@ -17,11 +17,13 @@ export default function AuthScreen({ onLogin }: Props) {
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
 
+  const refCode = new URLSearchParams(window.location.search).get('ref') || undefined;
+
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   const sendCode = async (withName?: string) => {
     setLoading(true);
-    const res = await authApi.sendOtp(email.trim().toLowerCase(), withName || name || undefined);
+    const res = await authApi.sendOtp(email.trim().toLowerCase(), withName || name || undefined, refCode);
     setLoading(false);
 
     if (res?.error === 'new_user') {
