@@ -68,7 +68,7 @@ export default function AuthScreen({ onLogin }: Props) {
           <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg">
             <Icon name="Sparkles" size={32} />
           </div>
-          <h1 className="font-display text-2xl font-bold">Лепесток</h1>
+          <h1 className="font-display text-2xl font-bold">БьютиБук</h1>
           <p className="text-center text-sm text-muted-foreground">Бронирование услуг красоты</p>
         </div>
 

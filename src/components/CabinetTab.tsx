@@ -32,7 +32,7 @@ export function TopBar({ session, onLogout, onGoBooking }: {
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Icon name="Sparkles" size={16} />
           </div>
-          <span className="font-display text-base font-bold tracking-tight">Лепесток</span>
+          <span className="font-display text-base font-bold tracking-tight">БьютиБук</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden flex-col items-end sm:flex">
