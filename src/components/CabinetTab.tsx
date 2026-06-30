@@ -82,6 +82,7 @@ export function MasterCabinet({ session, setSession }: {
   const [editSvcForm, setEditSvcForm] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
   const [editSvcPhotos, setEditSvcPhotos] = useState<[string|null, string|null, string|null]>([null, null, null]);
   const [activeTab, setActiveTab] = useState<'bookings' | 'services' | 'schedule'>('bookings');
+  const [bookingFilter, setBookingFilter] = useState<'pending' | 'confirmed' | 'done'>('confirmed');
   const [becomingMaster, setBecomingMaster] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
@@ -320,85 +321,116 @@ export function MasterCabinet({ session, setSession }: {
       {/* ЗАПИСИ */}
       {activeTab === 'bookings' && (
         <div className="space-y-3">
-          {loading ? <Skeleton className="h-32 rounded-2xl" /> : bookings.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Записей пока нет</p>
-          ) : bookings.map(b => {
-            const mins = minutesLeft(b.confirm_by);
+          {/* Фильтр по статусу */}
+          {(() => {
+            const pending   = bookings.filter(b => b.status === 'pending');
+            const confirmed = bookings.filter(b => b.status === 'confirmed');
+            const done      = bookings.filter(b => b.status === 'done');
+            const FILTERS: { key: 'pending' | 'confirmed' | 'done'; label: string; count: number }[] = [
+              { key: 'pending',   label: 'Ожидают',   count: pending.length },
+              { key: 'confirmed', label: 'Активные',  count: confirmed.length },
+              { key: 'done',      label: 'Завершены', count: done.length },
+            ];
+            const filtered = bookings.filter(b => b.status === bookingFilter);
             return (
-              <div key={b.id} className="rounded-2xl border border-border p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="font-mono-tnum font-semibold text-primary">{fmtTime(b.slot_start)}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{fmtDate(b.slot_start)}</span>
-                    <div className="flex items-center gap-1.5 text-sm font-medium">
-                      {b.client_name}
-                      {(b.client_rating ?? 0) > 0 && (
-                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                          <Icon name="Star" size={11} className="fill-primary text-primary" />
-                          {b.client_rating}
-                        </span>
+              <>
+                <div className="flex gap-1">
+                  {FILTERS.map(f => (
+                    <button key={f.key} onClick={() => setBookingFilter(f.key)}
+                      className={`flex flex-1 items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-medium transition-colors ${
+                        bookingFilter === f.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+                      }`}>
+                      {f.label}
+                      {f.count > 0 && (
+                        <span className={`rounded-full px-1.5 text-[10px] font-bold ${
+                          bookingFilter === f.key ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/15 text-primary'
+                        }`}>{f.count}</span>
                       )}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{b.service_title}</div>
-                  </div>
-                  <div>
-                    {b.status === 'pending' && mins !== null && (
-                      <Badge className="bg-accent/40 text-accent-foreground hover:bg-accent/40">
-                        <Icon name="Timer" size={12} className="mr-1" />
-                        {mins > 0 ? `${mins} мин` : 'истекает'}
-                      </Badge>
-                    )}
-                    {b.status === 'confirmed' && <Badge className="bg-success/15 text-success hover:bg-success/15">Активна</Badge>}
-                    {b.status === 'cancelled' && <Badge variant="secondary">Отменена</Badge>}
-                    {b.status === 'done' && <Badge variant="secondary">Оказана</Badge>}
-                  </div>
+                    </button>
+                  ))}
                 </div>
-                {b.status === 'pending' && (
-                  <div className="mt-2 flex gap-2">
-                    <Button size="sm" className="h-9 flex-1 rounded-xl bg-success text-success-foreground hover:bg-success/90" onClick={() => updateStatus(b.id, 'confirmed')}>
-                      <Icon name="Check" size={15} className="mr-1" /> Принять
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => updateStatus(b.id, 'cancelled')}>
-                      <Icon name="X" size={15} className="mr-1" /> Отклонить
-                    </Button>
-                  </div>
-                )}
-                {b.status === 'confirmed' && (
-                  <Button size="sm" className="mt-2 h-9 w-full rounded-xl" onClick={() => updateStatus(b.id, 'done')}>
-                    <Icon name="BadgeCheck" size={15} className="mr-1" /> Услуга оказана
-                  </Button>
-                )}
-                {b.status === 'done' && (
-                  <div className="mt-2">
-                    {(b.my_rating ?? 0) > 0 ? (
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Icon name="Star" size={13} className="fill-primary text-primary" />
-                        Вы оценили клиента: {b.my_rating}
-                      </p>
-                    ) : (
-                      <div>
-                        <p className="mb-1 text-xs text-muted-foreground">Оцените клиента:</p>
-                        <div className="flex gap-1">
-                          {[1,2,3,4,5].map(s => (
-                            <button key={s}
-                              onClick={async () => {
-                                const res = await ratingsApi.add(session.session_token, { booking_id: b.id, score: s });
-                                if (res?.ok) { toast.success('Оценка сохранена'); loadAll(); }
-                                else toast.error(res?.error || 'Ошибка');
-                              }}
-                              className="text-muted-foreground transition-colors hover:text-primary"
-                            >
-                              <Icon name="Star" size={24} className="hover:fill-primary" />
-                            </button>
-                          ))}
+                {loading ? <Skeleton className="h-32 rounded-2xl" /> : filtered.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">Нет заявок</p>
+                ) : filtered.map(b => {
+                  const mins = minutesLeft(b.confirm_by);
+                  return (
+                    <div key={b.id} className="rounded-2xl border border-border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="font-mono-tnum font-semibold text-primary">{fmtTime(b.slot_start)}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{fmtDate(b.slot_start)}</span>
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            {b.client_name}
+                            {(b.client_rating ?? 0) > 0 && (
+                              <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                                <Icon name="Star" size={11} className="fill-primary text-primary" />
+                                {b.client_rating}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{b.service_title}</div>
+                        </div>
+                        <div>
+                          {b.status === 'pending' && mins !== null && (
+                            <Badge className="bg-accent/40 text-accent-foreground hover:bg-accent/40">
+                              <Icon name="Timer" size={12} className="mr-1" />
+                              {mins > 0 ? `${mins} мин` : 'истекает'}
+                            </Badge>
+                          )}
+                          {b.status === 'confirmed' && <Badge className="bg-success/15 text-success hover:bg-success/15">Активна</Badge>}
+                          {b.status === 'cancelled' && <Badge variant="secondary">Отменена</Badge>}
+                          {b.status === 'done' && <Badge variant="secondary">Оказана</Badge>}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      {b.status === 'pending' && (
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" className="h-9 flex-1 rounded-xl bg-success text-success-foreground hover:bg-success/90" onClick={() => updateStatus(b.id, 'confirmed')}>
+                            <Icon name="Check" size={15} className="mr-1" /> Принять
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => updateStatus(b.id, 'cancelled')}>
+                            <Icon name="X" size={15} className="mr-1" /> Отклонить
+                          </Button>
+                        </div>
+                      )}
+                      {b.status === 'confirmed' && (
+                        <Button size="sm" className="mt-2 h-9 w-full rounded-xl" onClick={() => updateStatus(b.id, 'done')}>
+                          <Icon name="BadgeCheck" size={15} className="mr-1" /> Услуга оказана
+                        </Button>
+                      )}
+                      {b.status === 'done' && (
+                        <div className="mt-2">
+                          {(b.my_rating ?? 0) > 0 ? (
+                            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Icon name="Star" size={13} className="fill-primary text-primary" />
+                              Вы оценили клиента: {b.my_rating}
+                            </p>
+                          ) : (
+                            <div>
+                              <p className="mb-1 text-xs text-muted-foreground">Оцените клиента:</p>
+                              <div className="flex gap-1">
+                                {[1,2,3,4,5].map(s => (
+                                  <button key={s}
+                                    onClick={async () => {
+                                      const res = await ratingsApi.add(session.session_token, { booking_id: b.id, score: s });
+                                      if (res?.ok) { toast.success('Оценка сохранена'); loadAll(); }
+                                      else toast.error(res?.error || 'Ошибка');
+                                    }}
+                                    className="text-muted-foreground transition-colors hover:text-primary"
+                                  >
+                                    <Icon name="Star" size={24} className="hover:fill-primary" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
+          })()}
         </div>
       )}
 
@@ -523,12 +555,18 @@ export function MyBookings({ session }: { session: UserSession }) {
   const [loading, setLoading] = useState(true);
   const [ratingMap, setRatingMap] = useState<Record<number, number>>({});
 
+  const loadBookings = useCallback(async () => {
+    const data = await bookingsApi.list(session.session_token, 'client');
+    if (Array.isArray(data)) setBookings(data);
+    setLoading(false);
+  }, [session.session_token]);
+
   useEffect(() => {
-    bookingsApi.list(session.session_token, 'client').then(data => {
-      if (Array.isArray(data)) setBookings(data);
-      setLoading(false);
-    });
-  }, [session]);
+    loadBookings();
+    // Polling: статус заявок обновляется автоматически каждые 20 сек
+    const interval = setInterval(loadBookings, 20_000);
+    return () => clearInterval(interval);
+  }, [loadBookings]);
 
   const cancelBooking = async (id: number) => {
     await bookingsApi.updateStatus(session.session_token, id, 'cancelled');

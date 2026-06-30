@@ -106,7 +106,7 @@ def handler(event: dict, context) -> dict:
                     LEFT JOIN {S}.ratings r ON r.booking_id=b2.id AND r.from_role='master'
                     WHERE b.master_id = %s
                     GROUP BY b.id, cl.id, cl.name, s.title, s.price, s.price_type, sl.slot_start, sl.slot_end
-                    ORDER BY sl.slot_start DESC
+                    ORDER BY sl.slot_start ASC
                 """, (master_id,))
                 cols = ["id","status","confirm_by","created_at","client_id","client_name",
                         "service_title","price","price_type","slot_start","slot_end",
