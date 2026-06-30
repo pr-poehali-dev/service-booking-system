@@ -238,7 +238,7 @@ def handler(event: dict, context) -> dict:
             # Уведомление мастеру — новая заявка
             cur.execute(f"""
                 SELECT u.name, u.email, s.title,
-                       TO_CHAR(sl.slot_start, 'DD.MM HH24:MI') AS dt,
+                       TO_CHAR(sl.slot_start + INTERVAL '3 hours', 'DD.MM HH24:MI') AS dt,
                        mu.email AS master_email, mu.id AS master_user_id
                 FROM {S}.bookings b
                 JOIN {S}.users u ON u.id = b.client_id
@@ -306,7 +306,7 @@ def handler(event: dict, context) -> dict:
                 SELECT cu.id, cu.name, cu.email,
                        mu.id, mu.name, mu.email,
                        s.title,
-                       TO_CHAR(sl.slot_start, 'DD.MM HH24:MI') AS dt
+                       TO_CHAR(sl.slot_start + INTERVAL '3 hours', 'DD.MM HH24:MI') AS dt
                 FROM {S}.bookings b
                 JOIN {S}.users cu ON cu.id = b.client_id
                 JOIN {S}.masters m ON m.id = b.master_id
@@ -346,7 +346,7 @@ def handler(event: dict, context) -> dict:
             # Уведомляем клиентов, чьи конкурирующие брони автоматически отменились
             for other_bid, other_client_id in cancelled_ids:
                 cur.execute(f"""
-                    SELECT u.email, s.title, TO_CHAR(sl.slot_start, 'DD.MM HH24:MI')
+                    SELECT u.email, s.title, TO_CHAR(sl.slot_start + INTERVAL '3 hours', 'DD.MM HH24:MI')
                     FROM {S}.bookings b
                     JOIN {S}.users u ON u.id = b.client_id
                     JOIN {S}.services s ON s.id = b.service_id

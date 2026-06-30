@@ -115,7 +115,16 @@ export function MasterCabinet({ session, setSession }: {
     if (!session.master_id) return;
     const interval = setInterval(async () => {
       const bk = await bookingsApi.list(session.session_token, 'master');
-      if (Array.isArray(bk)) setBookings(bk);
+      if (Array.isArray(bk)) {
+        setBookings(prev => {
+          if (prev.length === 0) return bk;
+          const map = new Map(bk.map((b: Booking) => [b.id, b]));
+          const updated = prev.map((b: Booking) => map.has(b.id) ? { ...b, ...map.get(b.id) } : b)
+            .filter((b: Booking) => map.has(b.id));
+          bk.forEach((b: Booking) => { if (!prev.find((p: Booking) => p.id === b.id)) updated.push(b); });
+          return updated;
+        });
+      }
     }, 20_000);
     return () => clearInterval(interval);
   }, [loadAll, session.master_id, session.session_token]);
@@ -593,7 +602,17 @@ export function MyBookings({ session, focusBookingId }: { session: UserSession; 
 
   const loadBookings = useCallback(async () => {
     const data = await bookingsApi.list(session.session_token, 'client');
-    if (Array.isArray(data)) setBookings(data);
+    if (Array.isArray(data)) {
+      setBookings(prev => {
+        if (prev.length === 0) return data;
+        const map = new Map(data.map((b: Booking) => [b.id, b]));
+        // Обновляем поля существующих, не меняя порядок; добавляем новые в конец
+        const updated = prev.map(b => map.has(b.id) ? { ...b, ...map.get(b.id) } : b)
+          .filter(b => map.has(b.id));
+        data.forEach((b: Booking) => { if (!prev.find(p => p.id === b.id)) updated.push(b); });
+        return updated;
+      });
+    }
     setLoading(false);
   }, [session.session_token]);
 
