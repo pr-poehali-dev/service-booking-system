@@ -393,9 +393,14 @@ export function MasterCabinet({ session, setSession }: {
                         </div>
                       )}
                       {b.status === 'confirmed' && (
-                        <Button size="sm" className="mt-2 h-9 w-full rounded-xl" onClick={() => updateStatus(b.id, 'done')}>
-                          <Icon name="BadgeCheck" size={15} className="mr-1" /> Услуга оказана
-                        </Button>
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={() => updateStatus(b.id, 'done')}>
+                            <Icon name="BadgeCheck" size={15} className="mr-1" /> Оказана
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl text-destructive hover:text-destructive" onClick={() => updateStatus(b.id, 'cancelled')}>
+                            <Icon name="X" size={15} className="mr-1" /> Отменить
+                          </Button>
+                        </div>
                       )}
                       {b.status === 'done' && (
                         <div className="mt-2">
