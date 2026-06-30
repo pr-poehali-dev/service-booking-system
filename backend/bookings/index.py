@@ -105,7 +105,7 @@ def handler(event: dict, context) -> dict:
                 cur.execute(f"""
                     SELECT b.id, b.status, b.confirm_by, b.created_at,
                            m.id AS master_id, u.name AS master_name,
-                           m.photo1_url,
+                           m.photo_url,
                            s.title AS service_title, s.price::float, s.price_type,
                            sl.slot_start, sl.slot_end
                     FROM {S}.bookings b
@@ -117,7 +117,7 @@ def handler(event: dict, context) -> dict:
                     ORDER BY sl.slot_start DESC
                 """, (user_id,))
                 cols = ["id","status","confirm_by","created_at","master_id","master_name",
-                        "photo1_url","service_title","price","price_type","slot_start","slot_end"]
+                        "photo_url","service_title","price","price_type","slot_start","slot_end"]
 
             result = []
             for r in cur.fetchall():

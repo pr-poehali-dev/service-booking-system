@@ -135,7 +135,7 @@ def handler(event: dict, context) -> dict:
             if master_id:
                 cur.execute(f"""
                     SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
-                           m.photo1_url, m.photo2_url, m.photo3_url,
+                           m.photo_url,
                            COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
                            COUNT(DISTINCT r.id) AS review_count
                     FROM {S}.masters m
@@ -143,29 +143,29 @@ def handler(event: dict, context) -> dict:
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
                     WHERE m.id=%s
-                    GROUP BY m.id, u.id, u.name, m.about, m.address,
-                             m.photo1_url, m.photo2_url, m.photo3_url
+                    GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url
                 """, (master_id,))
                 row = cur.fetchone()
                 if not row:
                     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "not found"})}
-                cols = ["id","user_id","name","about","address",
-                        "photo1_url","photo2_url","photo3_url","rating","review_count"]
+                cols = ["id","user_id","name","about","address","photo_url","rating","review_count"]
                 master = dict(zip(cols, row))
                 master["rating"] = float(master["rating"])
                 cur.execute(f"""
-                    SELECT id, title, description, price_type, price::float
+                    SELECT id, title, description, price_type, price::float,
+                           photo1_url, photo2_url, photo3_url
                     FROM {S}.services WHERE master_id=%s AND is_active=TRUE ORDER BY id
                 """, (master_id,))
                 master["services"] = [
-                    dict(zip(["id","title","description","price_type","price"], r))
+                    dict(zip(["id","title","description","price_type","price",
+                              "photo1_url","photo2_url","photo3_url"], r))
                     for r in cur.fetchall()
                 ]
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps(master)}
             else:
                 cur.execute(f"""
                     SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
-                           m.photo1_url, m.photo2_url, m.photo3_url,
+                           m.photo_url,
                            COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
                            COUNT(DISTINCT r.id) AS review_count,
                            ARRAY_AGG(DISTINCT s.title) FILTER (WHERE s.title IS NOT NULL) AS service_titles
@@ -174,12 +174,11 @@ def handler(event: dict, context) -> dict:
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
                     LEFT JOIN {S}.services s ON s.master_id=m.id AND s.is_active=TRUE
-                    GROUP BY m.id, u.id, u.name, m.about, m.address,
-                             m.photo1_url, m.photo2_url, m.photo3_url
+                    GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url
                     ORDER BY rating DESC
                 """)
-                cols = ["id","user_id","name","about","address",
-                        "photo1_url","photo2_url","photo3_url","rating","review_count","service_titles"]
+                cols = ["id","user_id","name","about","address","photo_url",
+                        "rating","review_count","service_titles"]
                 result = []
                 for r in cur.fetchall():
                     row = dict(zip(cols, r))
@@ -201,7 +200,7 @@ def handler(event: dict, context) -> dict:
 
             # Обновить профиль мастера
             master_fields, master_vals = [], []
-            for f in ["about", "address", "photo1_url", "photo2_url", "photo3_url"]:
+            for f in ["about", "address", "photo_url"]:
                 if f in body:
                     master_fields.append(f"{f}=%s")
                     master_vals.append(body[f])

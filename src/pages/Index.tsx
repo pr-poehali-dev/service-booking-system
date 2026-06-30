@@ -15,17 +15,19 @@ import {
 } from '@/lib/api';
 import AuthScreen from '@/components/AuthScreen';
 import SlotCalendar from '@/components/SlotCalendar';
+import PhotoUpload from '@/components/PhotoUpload';
 
 // ─── Типы ────────────────────────────────────────────────────────────────────
 interface Master {
   id: number; user_id: number; name: string; about: string | null; address: string | null;
-  photo1_url: string | null; photo2_url: string | null; photo3_url: string | null;
+  photo_url: string | null;
   rating: number; review_count: number; service_titles?: string[];
   services?: Service[];
 }
 interface Service {
   id: number; title: string; description: string | null;
   price_type: string; price: number; is_active?: boolean;
+  photo1_url: string | null; photo2_url: string | null; photo3_url: string | null;
 }
 interface SlotT {
   id: number; slot_start: string; slot_end: string;
@@ -33,7 +35,7 @@ interface SlotT {
 }
 interface Booking {
   id: number; status: string; confirm_by: string | null; created_at: string;
-  master_id?: number; master_name?: string; photo1_url?: string;
+  master_id?: number; master_name?: string; photo_url?: string;
   client_id?: number; client_name?: string;
   service_title: string; price: number; price_type: string;
   slot_start: string; slot_end: string;
@@ -48,8 +50,8 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: 'bookings', label: 'Мои',     icon: 'Heart' },
 ];
 
-function photos(m: Master) {
-  return [m.photo1_url, m.photo2_url, m.photo3_url].filter(Boolean) as string[];
+function svcPhotos(s: Service) {
+  return [s.photo1_url, s.photo2_url, s.photo3_url].filter(Boolean) as string[];
 }
 function fmtPrice(s: Service) {
   return s.price_type === 'per_hour'
@@ -96,29 +98,15 @@ function TopBar({ session, onLogout }: { session: UserSession; onLogout: () => v
 function MasterSheet({ master, onBook, children }: {
   master: Master; onBook?: (m: Master) => void; children: React.ReactNode;
 }) {
-  const [photo, setPhoto] = useState(0);
-  const imgs = photos(master);
   return (
     <Sheet>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-3xl px-4 pb-8">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border" />
-        {imgs.length > 0 && (
-          <>
-            <div className="mt-4 overflow-hidden rounded-2xl bg-muted">
-              <img src={imgs[photo]} alt={master.name} className="aspect-[4/3] w-full object-cover" />
-            </div>
-            {imgs.length > 1 && (
-              <div className="mt-2 flex gap-2">
-                {imgs.map((p, i) => (
-                  <button key={i} onClick={() => setPhoto(i)}
-                    className={`overflow-hidden rounded-xl border-2 transition-all ${photo === i ? 'border-primary' : 'border-transparent opacity-60'}`}>
-                    <img src={p} alt="" className="h-14 w-14 object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
+        {master.photo_url && (
+          <div className="mt-4 overflow-hidden rounded-2xl bg-muted">
+            <img src={master.photo_url} alt={master.name} className="aspect-[4/3] w-full object-cover" />
+          </div>
         )}
         <div className="mt-4 flex items-start justify-between gap-3">
           <div>
@@ -206,8 +194,8 @@ function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
                 className="flex animate-fade-up cursor-pointer items-center gap-3 overflow-hidden border-border p-3 transition-transform active:scale-[0.98]"
                 style={{ animationDelay: `${i * 0.06}s` }}
               >
-                {m.photo1_url
-                  ? <img src={m.photo1_url} alt={m.name} className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
+                {m.photo_url
+                  ? <img src={m.photo_url} alt={m.name} className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
                   : <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-secondary">
                       <Icon name="User" size={30} className="text-muted-foreground" />
                     </div>
@@ -244,12 +232,17 @@ function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
 function ServiceCard({ master, service, onBook }: {
   master: Master; service: Service; onBook: (m: Master, s: Service) => void;
 }) {
+  const [sheetPhoto, setSheetPhoto] = useState(0);
+  const svcImgs = svcPhotos(service);
+  // Первое фото карточки: фото услуги если есть, иначе фото мастера
+  const cardImg = service.photo1_url || master.photo_url;
+
   return (
     <Sheet>
       <SheetTrigger asChild>
         <Card className="cursor-pointer overflow-hidden border-border transition-transform active:scale-[0.98]">
-          {master.photo1_url && (
-            <img src={master.photo1_url} alt={master.name} className="aspect-[16/9] w-full object-cover" />
+          {cardImg && (
+            <img src={cardImg} alt={service.title} className="aspect-[16/9] w-full object-cover" />
           )}
           <div className="p-3">
             <div className="flex items-start justify-between gap-2">
@@ -265,18 +258,35 @@ function ServiceCard({ master, service, onBook }: {
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-3xl px-4 pb-8">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border" />
-        {master.photo1_url && (
-          <div className="mt-4 overflow-hidden rounded-2xl">
-            <img src={master.photo1_url} alt={master.name} className="aspect-[4/3] w-full object-cover" />
+        {/* Фотогалерея услуги */}
+        {svcImgs.length > 0 ? (
+          <div className="mt-4">
+            <div className="overflow-hidden rounded-2xl">
+              <img src={svcImgs[sheetPhoto]} alt={service.title} className="aspect-[4/3] w-full object-cover" />
+            </div>
+            {svcImgs.length > 1 && (
+              <div className="mt-2 flex gap-2">
+                {svcImgs.map((p, i) => (
+                  <button key={i} onClick={() => setSheetPhoto(i)}
+                    className={`overflow-hidden rounded-xl border-2 transition-all ${sheetPhoto === i ? 'border-primary' : 'border-transparent opacity-60'}`}>
+                    <img src={p} alt="" className="h-14 w-14 object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        ) : master.photo_url ? (
+          <div className="mt-4 overflow-hidden rounded-2xl">
+            <img src={master.photo_url} alt={master.name} className="aspect-[4/3] w-full object-cover" />
+          </div>
+        ) : null}
         <div className="mt-4">
           <h2 className="font-display text-xl font-bold">{service.title}</h2>
           <p className="font-mono-tnum text-lg font-semibold text-primary">{fmtPrice(service)}</p>
           {service.description && <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{service.description}</p>}
           <div className="mt-4 flex items-center gap-3 rounded-xl bg-secondary/50 p-3">
-            {master.photo1_url
-              ? <Avatar className="h-10 w-10"><AvatarImage src={master.photo1_url} /></Avatar>
+            {master.photo_url
+              ? <Avatar className="h-10 w-10"><AvatarImage src={master.photo_url} /></Avatar>
               : <Avatar className="h-10 w-10"><AvatarFallback>{master.name[0]}</AvatarFallback></Avatar>
             }
             <div>
@@ -371,8 +381,8 @@ function Schedule({ session, focusMaster }: { session: UserSession; focusMaster:
           <Icon name="ChevronLeft" size={16} /> Назад
         </button>
         <div className="mb-4 flex items-center gap-3 rounded-2xl bg-secondary/60 p-3">
-          {bookingMaster.photo1_url && (
-            <img src={bookingMaster.photo1_url} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+          {(bookingService.photo1_url || bookingMaster.photo_url) && (
+            <img src={bookingService.photo1_url || bookingMaster.photo_url!} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
           )}
           <div>
             <p className="text-sm font-semibold">{bookingService.title}</p>
@@ -435,8 +445,10 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
   const [form, setForm] = useState({ name: '', about: '', address: '' });
   const [showAddSvc, setShowAddSvc] = useState(false);
   const [newSvc, setNewSvc] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
+  const [newSvcPhotos, setNewSvcPhotos] = useState<[string|null, string|null, string|null]>([null, null, null]);
   const [editingSvc, setEditingSvc] = useState<number | null>(null);
   const [editSvcForm, setEditSvcForm] = useState({ title: '', description: '', price: '', price_type: 'fixed' });
+  const [editSvcPhotos, setEditSvcPhotos] = useState<[string|null, string|null, string|null]>([null, null, null]);
   const [activeTab, setActiveTab] = useState<'bookings' | 'services' | 'schedule'>('bookings');
   const [becomingMaster, setBecomingMaster] = useState(false);
 
@@ -451,6 +463,7 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     if (pr?.id) {
       setProfile(pr);
       setForm({ name: pr.name || '', about: pr.about || '', address: pr.address || '' });
+      setProfilePhoto(pr.photo_url || null);
       if (Array.isArray(pr.services)) setServices(pr.services);
     }
     setLoading(false);
@@ -465,8 +478,20 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     loadAll();
   };
 
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+
+  const handleProfilePhotoChange = async (url: string | null) => {
+    setProfilePhoto(url);
+    await mastersApi.update(session.session_token, { photo_url: url || '' });
+    toast.success(url ? 'Фото обновлено' : 'Фото удалено');
+    loadAll();
+  };
+
   const saveProfile = async () => {
-    await mastersApi.update(session.session_token, { name: form.name, about: form.about, address: form.address });
+    await mastersApi.update(session.session_token, {
+      name: form.name, about: form.about, address: form.address,
+      ...(profilePhoto !== null ? { photo_url: profilePhoto } : {}),
+    });
     const updated = { ...session, name: form.name, address: form.address };
     setSession(updated);
     saveSession(updated);
@@ -480,11 +505,15 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
     const res = await servicesApi.create(session.session_token, {
       title: newSvc.title, description: newSvc.description || undefined,
       price_type: newSvc.price_type, price: parseFloat(newSvc.price),
+      photo1_url: newSvcPhotos[0] || undefined,
+      photo2_url: newSvcPhotos[1] || undefined,
+      photo3_url: newSvcPhotos[2] || undefined,
     });
     if (res?.id) {
       toast.success('Услуга добавлена');
       setShowAddSvc(false);
       setNewSvc({ title: '', description: '', price: '', price_type: 'fixed' });
+      setNewSvcPhotos([null, null, null]);
       loadAll();
     } else toast.error(res?.error || 'Ошибка');
   };
@@ -498,6 +527,7 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
   const startEditSvc = (s: Service) => {
     setEditingSvc(s.id);
     setEditSvcForm({ title: s.title, description: s.description || '', price: String(s.price), price_type: s.price_type });
+    setEditSvcPhotos([s.photo1_url, s.photo2_url, s.photo3_url]);
     setShowAddSvc(false);
   };
 
@@ -509,6 +539,9 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
       description: editSvcForm.description || null,
       price_type: editSvcForm.price_type,
       price: parseFloat(editSvcForm.price),
+      photo1_url: editSvcPhotos[0] ?? '',
+      photo2_url: editSvcPhotos[1] ?? '',
+      photo3_url: editSvcPhotos[2] ?? '',
     });
     if (res?.ok) {
       toast.success('Услуга обновлена');
@@ -573,8 +606,20 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
       {!loading && profile && (
         <Card className="mb-4 border-border p-4">
           {editProfile ? (
-            <div className="space-y-2">
-              <p className="mb-1 font-display text-sm font-semibold">Редактировать профиль</p>
+            <div className="space-y-3">
+              <p className="font-display text-sm font-semibold">Редактировать профиль</p>
+              {/* Фото профиля */}
+              <div className="flex items-center gap-4">
+                <PhotoUpload
+                  token={session.session_token}
+                  url={profilePhoto}
+                  target="master"
+                  size="lg"
+                  shape="round"
+                  onUploaded={handleProfilePhotoChange}
+                />
+                <p className="text-xs text-muted-foreground">Фото профиля<br/>отображается в каталоге</p>
+              </div>
               {[
                 { key: 'name', placeholder: 'Имя и фамилия' },
                 { key: 'address', placeholder: 'Адрес кабинета / студии' },
@@ -596,14 +641,22 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
             </div>
           ) : (
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-display font-semibold">{profile.name}</p>
-                {profile.address && (
-                  <p className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                    <Icon name="MapPin" size={11} />{profile.address}
-                  </p>
-                )}
-                {profile.about && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{profile.about}</p>}
+              <div className="flex items-center gap-3 min-w-0">
+                {profilePhoto
+                  ? <img src={profilePhoto} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+                  : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary">
+                      <Icon name="User" size={22} className="text-muted-foreground" />
+                    </div>
+                }
+                <div className="min-w-0">
+                  <p className="font-display font-semibold">{profile.name}</p>
+                  {profile.address && (
+                    <p className="flex items-center gap-0.5 text-xs text-muted-foreground truncate">
+                      <Icon name="MapPin" size={11} />{profile.address}
+                    </p>
+                  )}
+                  {profile.about && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{profile.about}</p>}
+                </div>
               </div>
               <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-xl" onClick={() => setEditProfile(true)}>
                 <Icon name="Pencil" size={14} />
@@ -686,7 +739,7 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
             <Icon name="Plus" size={16} className="mr-1.5" /> Добавить услугу
           </Button>
           {showAddSvc && (
-            <Card className="space-y-2 border-border p-4">
+            <Card className="space-y-3 border-border p-4">
               {[
                 { key: 'title', placeholder: 'Название услуги', type: 'text' },
                 { key: 'description', placeholder: 'Описание (необязательно)', type: 'text' },
@@ -703,9 +756,18 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
                 <option value="fixed">Фиксированная цена</option>
                 <option value="per_hour">За час</option>
               </select>
+              <div>
+                <p className="mb-2 text-xs text-muted-foreground">Фотографии услуги (до 3)</p>
+                <div className="flex gap-3">
+                  {([0, 1, 2] as const).map(i => (
+                    <PhotoUpload key={i} token={session.session_token} url={newSvcPhotos[i]} target="service" size="md"
+                      onUploaded={url => setNewSvcPhotos(p => { const n = [...p] as typeof p; n[i] = url; return n; })} />
+                  ))}
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={addService}>Сохранить</Button>
-                <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => setShowAddSvc(false)}>Отмена</Button>
+                <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => { setShowAddSvc(false); setNewSvcPhotos([null,null,null]); }}>Отмена</Button>
               </div>
             </Card>
           )}
@@ -715,8 +777,8 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
           {services.map(s => (
             <div key={s.id} className="rounded-2xl border border-border overflow-hidden">
               {editingSvc === s.id ? (
-                <div className="space-y-2 p-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Редактирование</p>
+                <div className="space-y-3 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Редактирование</p>
                   {[
                     { key: 'title', placeholder: 'Название услуги', type: 'text' },
                     { key: 'description', placeholder: 'Описание (необязательно)', type: 'text' },
@@ -734,27 +796,41 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
                     <option value="fixed">Фиксированная цена</option>
                     <option value="per_hour">За час</option>
                   </select>
+                  <div>
+                    <p className="mb-2 text-xs text-muted-foreground">Фотографии услуги (до 3)</p>
+                    <div className="flex gap-3">
+                      {([0, 1, 2] as const).map(i => (
+                        <PhotoUpload key={i} token={session.session_token} url={editSvcPhotos[i]} target="service" size="md"
+                          onUploaded={url => setEditSvcPhotos(p => { const n = [...p] as typeof p; n[i] = url; return n; })} />
+                      ))}
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={saveEditSvc}>Сохранить</Button>
                     <Button size="sm" variant="outline" className="h-9 flex-1 rounded-xl" onClick={() => setEditingSvc(null)}>Отмена</Button>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start justify-between p-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{s.title}</p>
-                    {s.description && <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>}
-                    <p className="font-mono-tnum mt-1 text-xs text-primary">{fmtPrice(s)}</p>
-                  </div>
-                  <div className="ml-2 flex shrink-0 gap-1">
-                    <button onClick={() => startEditSvc(s)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary">
-                      <Icon name="Pencil" size={14} />
-                    </button>
-                    <button onClick={() => deleteService(s.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10">
-                      <Icon name="Trash2" size={15} />
-                    </button>
+                <div>
+                  {s.photo1_url && (
+                    <img src={s.photo1_url} alt={s.title} className="aspect-[16/7] w-full object-cover" />
+                  )}
+                  <div className="flex items-start justify-between p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{s.title}</p>
+                      {s.description && <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{s.description}</p>}
+                      <p className="font-mono-tnum mt-1 text-xs text-primary">{fmtPrice(s)}</p>
+                    </div>
+                    <div className="ml-2 flex shrink-0 gap-1">
+                      <button onClick={() => startEditSvc(s)}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary">
+                        <Icon name="Pencil" size={14} />
+                      </button>
+                      <button onClick={() => deleteService(s.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10">
+                        <Icon name="Trash2" size={15} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -805,8 +881,8 @@ function MyBookings({ session }: { session: UserSession }) {
     return (
       <Card className={`border-border p-3 ${b.status === 'confirmed' ? 'border-success/30 bg-success/5' : ''}`}>
         <div className="flex items-center gap-3">
-          {b.photo1_url
-            ? <Avatar className="h-10 w-10"><AvatarImage src={b.photo1_url} /></Avatar>
+          {b.photo_url
+            ? <Avatar className="h-10 w-10"><AvatarImage src={b.photo_url} /></Avatar>
             : <Avatar className="h-10 w-10"><AvatarFallback>{(b.master_name || '?')[0]}</AvatarFallback></Avatar>
           }
           <div className="min-w-0 flex-1">

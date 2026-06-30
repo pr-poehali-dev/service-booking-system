@@ -4,6 +4,7 @@ const URLS = {
   bookings: 'https://functions.poehali.dev/b421637b-0ba0-45a4-a659-c178ad450edb',
   ratings:  'https://functions.poehali.dev/5ec6be20-e414-43ba-8bed-413ecff8aeaf',
   services: 'https://functions.poehali.dev/e82f29da-cb72-405a-bb0e-49d14495fe2a',
+  upload:   'https://functions.poehali.dev/a26c9112-2983-4971-a812-01169def416c',
 };
 
 async function req(url: string, opts: RequestInit = {}) {
@@ -70,7 +71,7 @@ export const mastersApi = {
 export const servicesApi = {
   list: (masterId: number) => req(`${URLS.services}?master_id=${masterId}`),
 
-  create: (token: string, data: { title: string; description?: string; price_type: string; price: number }) =>
+  create: (token: string, data: { title: string; description?: string; price_type: string; price: number; photo1_url?: string; photo2_url?: string; photo3_url?: string }) =>
     req(URLS.services, { method: 'POST', headers: { 'X-Session-Token': token }, body: JSON.stringify(data) }),
 
   update: (token: string, id: number, data: Record<string, unknown>) =>
@@ -108,6 +109,30 @@ export const ratingsApi = {
   add: (token: string, data: { booking_id: number; score: number; comment?: string }) =>
     req(URLS.ratings, { method: 'POST', headers: { 'X-Session-Token': token }, body: JSON.stringify(data) }),
 };
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+export async function uploadPhoto(
+  token: string,
+  file: File,
+  target: 'master' | 'service' = 'master'
+): Promise<string | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const dataUrl = e.target?.result as string;
+      const [header, data] = dataUrl.split(',');
+      const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+      const res = await fetch(URLS.upload, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Session-Token': token },
+        body: JSON.stringify({ data, mime, target }),
+      });
+      const json = await res.json();
+      resolve(json?.url ?? null);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // ── Session helpers ────────────────────────────────────────────────────────────
 export const SESSION_KEY = 'lepestok_session';
