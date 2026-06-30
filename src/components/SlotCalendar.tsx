@@ -22,7 +22,16 @@ interface Props {
   pickedSlotIds?: number[];
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+// Рабочие часы 8:00–22:00, шаг 30 минут
+const START_HOUR = 8;
+const END_HOUR = 22;
+// Все получасовые метки: [{ hour, min }]
+const TIME_SLOTS = Array.from(
+  { length: (END_HOUR - START_HOUR) * 2 },
+  (_, i) => ({ hour: START_HOUR + Math.floor(i / 2), min: i % 2 === 0 ? 0 : 30 })
+);
+
+const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 function getWeekDays(base: Date): Date[] {
   const monday = new Date(base);
@@ -35,17 +44,24 @@ function getWeekDays(base: Date): Date[] {
   });
 }
 
-function toISO(date: Date, hour: number) {
-  const d = new Date(date);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
-}
-
 function dateKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+// Ключ слота: "YYYY-MM-DD:H:MM"
+function slotKey(dateStr: string, hour: number, min: number) {
+  return `${dateStr}:${hour}:${min}`;
+}
+
+function toISO(date: Date, hour: number, min: number) {
+  const d = new Date(date);
+  d.setHours(hour, min, 0, 0);
+  return d.toISOString();
+}
+
+function fmtHM(hour: number, min: number) {
+  return `${String(hour).padStart(2, '0')}:${min === 0 ? '00' : '30'}`;
+}
 
 export default function SlotCalendar({
   masterId, token, readOnly = false, onSlotPick, pickedSlotIds = [],
@@ -65,21 +81,20 @@ export default function SlotCalendar({
   useEffect(() => {
     loadSlots();
     if (!readOnly) return;
-    // В режиме выбора слота клиентом — обновляем состояния каждые 10 сек
     const interval = setInterval(loadSlots, 10_000);
     return () => clearInterval(interval);
   }, [loadSlots, readOnly]);
 
-  // Индекс "YYYY-MM-DD:H" → Slot
+  // Индекс "YYYY-MM-DD:H:MM" → Slot
   const slotIndex: Record<string, Slot> = {};
   slots.forEach(s => {
-    const slotDate = new Date(s.slot_start);
-    const k = `${slotDate.toISOString().slice(0, 10)}:${slotDate.getHours()}`;
+    const d = new Date(s.slot_start);
+    const k = slotKey(d.toISOString().slice(0, 10), d.getHours(), d.getMinutes());
     slotIndex[k] = s;
   });
 
-  const toggleMasterSlot = (day: Date, hour: number) => {
-    const key = `${dateKey(day)}:${hour}`;
+  const toggleMasterSlot = (day: Date, hour: number, min: number) => {
+    const key = slotKey(dateKey(day), hour, min);
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(key)) { next.delete(key); } else { next.add(key); }
@@ -94,16 +109,22 @@ export default function SlotCalendar({
     const toDelete: number[] = [];
 
     selected.forEach(key => {
-      const parts = key.split(':');
-      const dateStr = parts[0];
-      const hour = parseInt(parts[1]);
+      // key = "YYYY-MM-DD:H:MM"
+      const [dateStr, hourStr, minStr] = key.split(':');
+      const hour = parseInt(hourStr);
+      const min = parseInt(minStr);
       const day = days.find(d => dateKey(d) === dateStr);
       if (!day) return;
       const existing = slotIndex[key];
       if (existing) {
         if (!existing.has_booking) toDelete.push(existing.id);
       } else {
-        toCreate.push({ slot_start: toISO(day, hour), slot_end: toISO(day, hour + 1) });
+        const endMin = min + 30;
+        const endHour = endMin >= 60 ? hour + 1 : hour;
+        toCreate.push({
+          slot_start: toISO(day, hour, min),
+          slot_end: toISO(day, endHour, endMin % 60),
+        });
       }
     });
 
@@ -120,7 +141,6 @@ export default function SlotCalendar({
     toast.success('Расписание обновлено');
   };
 
-  const visibleHours = HOURS.filter(h => h >= 7 && h <= 22);
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
   return (
@@ -165,76 +185,80 @@ export default function SlotCalendar({
 
         {/* Сетка */}
         <div className="space-y-0.5">
-          {visibleHours.map(hour => (
-            <div key={hour} className="grid gap-0.5 items-center" style={{ gridTemplateColumns: '36px repeat(7, 1fr)' }}>
-              <span className="pr-1 text-right text-[10px] text-muted-foreground leading-none">{hour}:00</span>
-              {days.map((d, di) => {
-                const now = new Date();
-                const isPast = d < todayStart || (d.toDateString() === now.toDateString() && hour <= now.getHours());
-                const key = `${dateKey(d)}:${hour}`;
-                const slot = slotIndex[key];
+          {TIME_SLOTS.map(({ hour, min }) => {
+            const isHalfHour = min === 30;
+            return (
+              <div key={`${hour}:${min}`} className="grid gap-0.5 items-center" style={{ gridTemplateColumns: '36px repeat(7, 1fr)' }}>
+                <span className="pr-1 text-right text-[10px] text-muted-foreground leading-none">
+                  {isHalfHour ? <span className="text-muted-foreground/50">{fmtHM(hour, min)}</span> : fmtHM(hour, min)}
+                </span>
+                {days.map((d, di) => {
+                  const now = new Date();
+                  const slotTime = new Date(d);
+                  slotTime.setHours(hour, min, 0, 0);
+                  const isPast = slotTime <= now;
+                  const key = slotKey(dateKey(d), hour, min);
+                  const slot = slotIndex[key];
 
-                if (readOnly) {
-                  if (!slot || slot.is_blocked) return <div key={di} className="h-6 rounded bg-muted/30" />;
-                  const confirmed = slot.has_confirmed;
-                  const contested = slot.has_booking && !slot.has_confirmed; // pending, но не confirmed
-                  const picked = pickedSlotIds.includes(slot.id);
+                  if (readOnly) {
+                    if (!slot || slot.is_blocked) return <div key={di} className="h-5 rounded bg-muted/30" />;
+                    const confirmed = slot.has_confirmed;
+                    const contested = slot.has_booking && !slot.has_confirmed;
+                    const picked = pickedSlotIds.includes(slot.id);
+                    return (
+                      <button
+                        key={di}
+                        disabled={confirmed || isPast}
+                        onClick={() => onSlotPick?.(slot)}
+                        className={`h-5 rounded text-[9px] font-medium transition-all active:scale-95 ${
+                          picked
+                            ? 'bg-primary text-primary-foreground'
+                            : confirmed
+                            ? 'cursor-not-allowed bg-destructive/40 text-destructive-foreground opacity-80'
+                            : contested
+                            ? 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                            : 'bg-success/25 text-success hover:bg-success/40'
+                        }`}
+                        title={contested ? 'Есть заявки — слот ещё свободен' : undefined}
+                      />
+                    );
+                  }
+
+                  // Мастер
+                  const isSel = selected.has(key);
+                  const isActive = !!slot && !slot.is_blocked;
                   return (
                     <button
                       key={di}
-                      disabled={confirmed || isPast}
-                      onClick={() => onSlotPick?.(slot)}
-                      className={`h-6 rounded text-[10px] font-medium transition-all active:scale-95 ${
-                        picked
-                          ? 'bg-primary text-primary-foreground'
-                          : confirmed
-                          ? 'cursor-not-allowed bg-destructive/40 text-destructive-foreground opacity-80'
-                          : contested
-                          ? 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                          : 'bg-success/25 text-success hover:bg-success/40'
+                      disabled={isPast}
+                      onClick={() => { if (!isPast) toggleMasterSlot(d, hour, min); }}
+                      className={`h-5 rounded text-[9px] transition-all ${
+                        isPast
+                          ? 'cursor-not-allowed bg-muted/20 opacity-30'
+                          : isSel
+                          ? 'bg-accent/70 text-accent-foreground ring-1 ring-accent'
+                          : isActive
+                          ? slot.has_confirmed
+                            ? 'bg-destructive/50 text-destructive-foreground'
+                            : slot.has_booking
+                            ? 'bg-primary/50 text-primary'
+                            : 'bg-primary/25 text-primary'
+                          : 'bg-muted/30 hover:bg-secondary'
                       }`}
-                      title={contested ? 'Есть заявки — слот ещё свободен' : undefined}
-                    >
-                      {hour}
-                    </button>
+                    />
                   );
-                }
-
-                // Мастер
-                const isSel = selected.has(key);
-                const isActive = !!slot && !slot.is_blocked;
-                return (
-                  <button
-                    key={di}
-                    disabled={isPast}
-                    onClick={() => { if (!isPast) toggleMasterSlot(d, hour); }}
-                    className={`h-6 rounded text-[10px] transition-all ${
-                      isPast
-                        ? 'cursor-not-allowed bg-muted/20 opacity-30'
-                        : isSel
-                        ? 'bg-accent/70 text-accent-foreground ring-1 ring-accent'
-                        : isActive
-                        ? slot.has_confirmed
-                          ? 'bg-destructive/50 text-destructive-foreground'
-                          : slot.has_booking
-                          ? 'bg-primary/50 text-primary'
-                          : 'bg-primary/25 text-primary'
-                        : 'bg-muted/30 hover:bg-secondary'
-                    }`}
-                  >
-                    {isActive && !isSel ? (slot.has_booking ? '●' : '✓') : isSel ? '~' : ''}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {!readOnly && (
           <div className="mt-3 space-y-2">
             <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-primary/25" /> свободен</span>
-              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-primary/50" /> занят</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-primary/50" /> заявки</span>
+              <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-destructive/50" /> подтверждён</span>
               <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded bg-accent/70" /> выбран</span>
             </div>
             {selected.size > 0 && (

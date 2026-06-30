@@ -25,7 +25,7 @@ export interface Booking {
   slot_start: string; slot_end: string;
 }
 
-export const MAX_SLOTS_PER_MASTER = 2;
+export const MAX_SLOTS_PER_MASTER = 4;
 
 export type Tab = 'home' | 'schedule' | 'master' | 'bookings' | 'admin';
 
@@ -46,9 +46,10 @@ export function svcPhotos(s: Service) {
 }
 
 export function fmtPrice(s: Service) {
-  return s.price_type === 'per_hour'
-    ? `${s.price.toLocaleString('ru')} ₽/ч`
-    : `${s.price.toLocaleString('ru')} ₽`;
+  const p = s.price.toLocaleString('ru');
+  if (s.price_type === 'per_hour') return `${p} ₽/ч`;
+  if (s.price_type === 'per_minute') return `${p} ₽/мин`;
+  return `${p} ₽`;
 }
 
 export function fmtTime(iso: string) {

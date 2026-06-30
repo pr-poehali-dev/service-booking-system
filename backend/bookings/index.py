@@ -15,7 +15,7 @@ CORS = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Session-Token",
 }
-MAX_SLOTS_PER_MASTER = 2
+MAX_SLOTS_PER_MASTER = 4
 
 
 def get_conn():

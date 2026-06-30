@@ -226,6 +226,7 @@ export function MasterCabinet({ session, setSession }: {
     );
   }
 
+  const active  = bookings.filter(b => b.status !== 'cancelled');
   const pending = bookings.filter(b => b.status === 'pending');
   const done    = bookings.filter(b => b.status === 'done');
 
@@ -234,7 +235,7 @@ export function MasterCabinet({ session, setSession }: {
       <h2 className="mb-4 font-display text-lg font-bold">Кабинет мастера</h2>
 
       <div className="mb-4 grid grid-cols-3 gap-2">
-        {[['Записей', bookings.length, 'Calendar'], ['Ждут', pending.length, 'Clock'], ['Готово', done.length, 'BadgeCheck']].map(([l, v, ic], i) => (
+        {[['Записей', active.length, 'Calendar'], ['Ждут', pending.length, 'Clock'], ['Готово', done.length, 'BadgeCheck']].map(([l, v, ic], i) => (
           <Card key={i} className="border-border p-3 text-center">
             <Icon name={ic as string} size={18} className="mx-auto mb-1 text-primary" />
             <div className="font-mono-tnum text-lg font-bold">{v}</div>
@@ -462,6 +463,7 @@ export function MasterCabinet({ session, setSession }: {
                 className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none">
                 <option value="fixed">Фиксированная цена</option>
                 <option value="per_hour">За час</option>
+                <option value="per_minute">За минуту</option>
               </select>
               <div>
                 <p className="mb-2 text-xs text-muted-foreground">Фотографии услуги (до 3)</p>
@@ -502,6 +504,7 @@ export function MasterCabinet({ session, setSession }: {
                     className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none">
                     <option value="fixed">Фиксированная цена</option>
                     <option value="per_hour">За час</option>
+                    <option value="per_minute">За минуту</option>
                   </select>
                   <div>
                     <p className="mb-2 text-xs text-muted-foreground">Фотографии услуги (до 3)</p>
