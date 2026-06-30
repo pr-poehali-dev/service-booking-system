@@ -135,6 +135,9 @@ def handler(event: dict, context) -> dict:
                 for k in ["confirm_by", "created_at", "slot_start", "slot_end"]:
                     if row.get(k):
                         row[k] = row[k].isoformat()
+                for k in ["client_rating", "my_rating", "price"]:
+                    if k in row and row[k] is not None:
+                        row[k] = float(row[k])
                 result.append(row)
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(result)}
 
