@@ -171,12 +171,13 @@ def handler(event: dict, context) -> dict:
             if not slot:
                 return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Слот недоступен"})}
 
+            # Проверяем что этот клиент ещё не подавал заявку на этот же слот
             cur.execute(f"""
                 SELECT 1 FROM {S}.bookings
-                WHERE slot_id=%s AND status IN ('pending','confirmed')
-            """, (slot_id,))
+                WHERE slot_id=%s AND client_id=%s AND status IN ('pending','confirmed')
+            """, (slot_id, user_id))
             if cur.fetchone():
-                return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Слот уже занят"})}
+                return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Вы уже подали заявку на этот слот"})}
 
             slot_start = slot[0]
             now = datetime.now(timezone.utc)
@@ -221,12 +222,12 @@ def handler(event: dict, context) -> dict:
                 UPDATE {S}.bookings SET status=%s, updated_at=NOW() WHERE id=%s
             """, (new_status, booking_id))
 
-            # Подтверждение — отменяем другие pending-брони клиента на тот же слот
+            # Подтверждение — отменяем все остальные pending-брони на тот же слот (любые клиенты)
             if new_status == "confirmed":
                 cur.execute(f"""
                     UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
-                    WHERE client_id=%s AND slot_id=%s AND id<>%s AND status='pending'
-                """, (b_client, b_slot, booking_id))
+                    WHERE slot_id=%s AND id<>%s AND status='pending'
+                """, (b_slot, booking_id))
 
             conn.commit()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
