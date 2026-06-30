@@ -74,45 +74,46 @@ def handler(event: dict, context) -> dict:
         elif method == "POST":
             if not token:
                 return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "unauthorized"})}
-            cur.execute(f"SELECT id, role FROM {S}.users WHERE session_token=%s", (token,))
+            cur.execute(f"SELECT id, is_master FROM {S}.users WHERE session_token=%s", (token,))
             u = cur.fetchone()
             if not u:
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
-            user_id, role = u
+            user_id, is_master = u
 
             body = json.loads(event.get("body") or "{}")
             booking_id = body["booking_id"]
             score = int(body["score"])
             comment = body.get("comment")
 
-            # Проверяем что бронь принадлежит этому пользователю
+            # Проверяем что бронь существует
             cur.execute(f"SELECT status, client_id, master_id FROM {S}.bookings WHERE id=%s", (booking_id,))
             b = cur.fetchone()
             if not b:
                 return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "booking not found"})}
-            b_status, b_client, b_master = b
+            b_status, b_client, b_master_id = b
 
-            # Клиент может оценить только после done
-            if role == "client":
+            if is_master:
+                # Мастер оценивает клиента
+                cur.execute(f"SELECT id FROM {S}.masters WHERE user_id=%s", (user_id,))
+                m = cur.fetchone()
+                if not m or m[0] != b_master_id:
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not your booking"})}
+                from_role = "master"
+            else:
+                # Клиент оценивает мастера — только после done
                 if b_client != user_id:
                     return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not your booking"})}
                 if b_status != "done":
                     return {"statusCode": 409, "headers": CORS,
                             "body": json.dumps({"error": "Оценка доступна только после подтверждения услуги мастером"})}
-
-            # Мастер может оценить в любое время
-            if role == "master":
-                cur.execute(f"SELECT id FROM {S}.masters WHERE user_id=%s", (user_id,))
-                m = cur.fetchone()
-                if not m or m[0] != b_master:
-                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not your booking"})}
+                from_role = "client"
 
             cur.execute(f"""
                 INSERT INTO {S}.ratings (booking_id, from_role, score, comment)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (booking_id, from_role)
                 DO UPDATE SET score=EXCLUDED.score, comment=EXCLUDED.comment
-            """, (booking_id, role, score, comment))
+            """, (booking_id, from_role, score, comment))
             conn.commit()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 

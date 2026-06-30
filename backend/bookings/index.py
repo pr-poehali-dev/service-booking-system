@@ -91,16 +91,26 @@ def handler(event: dict, context) -> dict:
                     SELECT b.id, b.status, b.confirm_by, b.created_at,
                            cl.id AS client_id, cl.name AS client_name,
                            s.title AS service_title, s.price::float, s.price_type,
-                           sl.slot_start, sl.slot_end
+                           sl.slot_start, sl.slot_end,
+                           COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS client_rating,
+                           COALESCE((
+                               SELECT r2.score FROM {S}.ratings r2
+                               WHERE r2.booking_id=b.id AND r2.from_role='master'
+                               LIMIT 1
+                           ), 0) AS my_rating
                     FROM {S}.bookings b
                     JOIN {S}.users cl ON cl.id = b.client_id
                     JOIN {S}.services s ON s.id = b.service_id
                     JOIN {S}.slots sl ON sl.id = b.slot_id
+                    LEFT JOIN {S}.bookings b2 ON b2.client_id = cl.id AND b2.status='done'
+                    LEFT JOIN {S}.ratings r ON r.booking_id=b2.id AND r.from_role='master'
                     WHERE b.master_id = %s
+                    GROUP BY b.id, cl.id, cl.name, s.title, s.price, s.price_type, sl.slot_start, sl.slot_end
                     ORDER BY sl.slot_start DESC
                 """, (master_id,))
                 cols = ["id","status","confirm_by","created_at","client_id","client_name",
-                        "service_title","price","price_type","slot_start","slot_end"]
+                        "service_title","price","price_type","slot_start","slot_end",
+                        "client_rating","my_rating"]
             else:
                 cur.execute(f"""
                     SELECT b.id, b.status, b.confirm_by, b.created_at,

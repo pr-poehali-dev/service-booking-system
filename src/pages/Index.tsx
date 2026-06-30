@@ -38,6 +38,7 @@ interface Booking {
   id: number; status: string; confirm_by: string | null; created_at: string;
   master_id?: number; master_name?: string; photo_url?: string;
   client_id?: number; client_name?: string;
+  client_rating?: number; my_rating?: number;
   service_title: string; price: number; price_type: string;
   slot_start: string; slot_end: string;
 }
@@ -766,7 +767,15 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
                   <div>
                     <span className="font-mono-tnum font-semibold text-primary">{fmtTime(b.slot_start)}</span>
                     <span className="ml-2 text-xs text-muted-foreground">{fmtDate(b.slot_start)}</span>
-                    <div className="text-sm font-medium">{b.client_name}</div>
+                    <div className="flex items-center gap-1.5 text-sm font-medium">
+                      {b.client_name}
+                      {(b.client_rating ?? 0) > 0 && (
+                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                          <Icon name="Star" size={11} className="fill-primary text-primary" />
+                          {b.client_rating}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">{b.service_title}</div>
                   </div>
                   <div>
@@ -797,9 +806,32 @@ function MasterCabinet({ session, setSession }: { session: UserSession; setSessi
                   </Button>
                 )}
                 {b.status === 'done' && (
-                  <Button size="sm" variant="outline" className="mt-2 h-9 w-full rounded-xl" onClick={() => toast('Оценка клиенту')}>
-                    <Icon name="Star" size={15} className="mr-1" /> Оценить клиента
-                  </Button>
+                  <div className="mt-2">
+                    {(b.my_rating ?? 0) > 0 ? (
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Icon name="Star" size={13} className="fill-primary text-primary" />
+                        Вы оценили клиента: {b.my_rating}
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="mb-1 text-xs text-muted-foreground">Оцените клиента:</p>
+                        <div className="flex gap-1">
+                          {[1,2,3,4,5].map(s => (
+                            <button key={s}
+                              onClick={async () => {
+                                const res = await ratingsApi.add(session.session_token, { booking_id: b.id, score: s });
+                                if (res?.ok) { toast.success('Оценка сохранена'); loadAll(); }
+                                else toast.error(res?.error || 'Ошибка');
+                              }}
+                              className="text-muted-foreground transition-colors hover:text-primary"
+                            >
+                              <Icon name="Star" size={24} className="hover:fill-primary" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );
