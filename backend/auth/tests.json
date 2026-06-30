@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "name": "Получить текущего пользователя",
+      "method": "GET",
+      "path": "/",
+      "headers": { "X-Session-Token": "token-client-1" },
+      "expectedStatus": 200,
+      "expectedBody": { "role": "client" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

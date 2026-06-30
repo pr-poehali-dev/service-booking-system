@@ -1,17 +1,17 @@
 """
 Услуги мастера.
-GET  /?master_id=N  — список услуг мастера
-POST /              — создать услугу (X-Session-Token мастера)
-PUT  /?service_id=N — обновить услугу
+GET    /?master_id=N  — список услуг
+POST   /              — создать (X-Session-Token мастера)
+PUT    /?service_id=N — обновить
+DELETE /?service_id=N — удалить (мягко: is_active=FALSE)
 """
 import json, os
 import psycopg2
 
 S = "t_p84631928_service_booking_syst"
-
 CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Session-Token",
 }
 
@@ -21,11 +21,19 @@ def get_conn():
 
 
 def resolve_master(cur, token):
+    if not token:
+        return None
     cur.execute(
-        f"SELECT u.id, m.id FROM {S}.users u JOIN {S}.masters m ON m.user_id=u.id WHERE u.session_token=%s AND u.role='master'",
+        f"SELECT u.id, m.id FROM {S}.users u JOIN {S}.masters m ON m.user_id=u.id "
+        f"WHERE u.session_token=%s AND u.role='master'",
         (token,)
     )
     return cur.fetchone()
+
+
+def get_token(event):
+    h = event.get("headers") or {}
+    return h.get("x-session-token") or h.get("X-Session-Token")
 
 
 def handler(event: dict, context) -> dict:
@@ -44,30 +52,31 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "master_id required"})}
             cur.execute(f"""
                 SELECT id, title, description, price_type, price::float, is_active
-                FROM {S}.services WHERE master_id=%s ORDER BY id
+                FROM {S}.services WHERE master_id=%s AND is_active=TRUE ORDER BY id
             """, (master_id,))
             cols = ["id", "title", "description", "price_type", "price", "is_active"]
             return {"statusCode": 200, "headers": CORS,
                     "body": json.dumps([dict(zip(cols, r)) for r in cur.fetchall()])}
 
         elif method == "POST":
-            token = (event.get("headers") or {}).get("x-session-token") or (event.get("headers") or {}).get("X-Session-Token")
-            row = resolve_master(cur, token)
+            row = resolve_master(cur, get_token(event))
             if not row:
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
             _, master_id = row
             body = json.loads(event.get("body") or "{}")
+            if not body.get("title") or body.get("price") is None:
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "title and price required"})}
             cur.execute(f"""
                 INSERT INTO {S}.services (master_id, title, description, price_type, price)
                 VALUES (%s, %s, %s, %s, %s) RETURNING id
-            """, (master_id, body["title"], body.get("description"), body.get("price_type", "fixed"), body["price"]))
+            """, (master_id, body["title"], body.get("description"),
+                  body.get("price_type", "fixed"), float(body["price"])))
             new_id = cur.fetchone()[0]
             conn.commit()
             return {"statusCode": 201, "headers": CORS, "body": json.dumps({"id": new_id})}
 
         elif method == "PUT":
-            token = (event.get("headers") or {}).get("x-session-token") or (event.get("headers") or {}).get("X-Session-Token")
-            row = resolve_master(cur, token)
+            row = resolve_master(cur, get_token(event))
             if not row:
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
             _, master_id = row
@@ -79,7 +88,7 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not your service"})}
             body = json.loads(event.get("body") or "{}")
             fields, vals = [], []
-            for f in ["title", "description", "price_type", "price", "is_active"]:
+            for f in ["title", "description", "price_type", "price"]:
                 if f in body:
                     fields.append(f"{f}=%s")
                     vals.append(body[f])
@@ -87,6 +96,21 @@ def handler(event: dict, context) -> dict:
                 vals.append(service_id)
                 cur.execute(f"UPDATE {S}.services SET {', '.join(fields)} WHERE id=%s", vals)
                 conn.commit()
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+        elif method == "DELETE":
+            row = resolve_master(cur, get_token(event))
+            if not row:
+                return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+            _, master_id = row
+            service_id = params.get("service_id")
+            if not service_id:
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "service_id required"})}
+            cur.execute(f"SELECT id FROM {S}.services WHERE id=%s AND master_id=%s", (service_id, master_id))
+            if not cur.fetchone():
+                return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not your service"})}
+            cur.execute(f"UPDATE {S}.services SET is_active=FALSE WHERE id=%s", (service_id,))
+            conn.commit()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
     finally:

@@ -1,10 +1,11 @@
 """
-Каталог мастеров, профили и слоты.
-GET  /           — список всех мастеров с рейтингом
-GET  /?master_id=N  — профиль одного мастера
-PUT  /           — обновить профиль (X-Session-Token мастера)
-GET  /?action=slots&master_id=N  — слоты мастера
-POST /?action=slots               — создать слот (X-Session-Token мастера)
+Каталог мастеров, профили, слоты.
+GET  /                             — список всех мастеров
+GET  /?master_id=N                 — профиль мастера со слотами
+PUT  /                             — обновить профиль (имя, about, address, фото)
+GET  /?action=slots&master_id=N[&date=YYYY-MM-DD] — слоты
+POST /?action=slots                — создать слот(ы)
+DELETE /?action=slots&slot_id=N    — удалить слот
 """
 import json, os
 import psycopg2
@@ -12,7 +13,7 @@ import psycopg2
 S = "t_p84631928_service_booking_syst"
 CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Session-Token",
 }
 
@@ -30,7 +31,8 @@ def resolve_master(cur, token):
     if not token:
         return None
     cur.execute(
-        f"SELECT u.id, m.id FROM {S}.users u JOIN {S}.masters m ON m.user_id=u.id WHERE u.session_token=%s AND u.role='master'",
+        f"SELECT u.id, m.id FROM {S}.users u JOIN {S}.masters m ON m.user_id=u.id "
+        f"WHERE u.session_token=%s AND u.role='master'",
         (token,)
     )
     return cur.fetchone()
@@ -48,7 +50,7 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
-        # ============ СЛОТЫ ============
+        # ──────────── СЛОТЫ ────────────────────────────────────────────────
         if action == "slots":
             if method == "GET":
                 master_id = params.get("master_id")
@@ -58,7 +60,10 @@ def handler(event: dict, context) -> dict:
                 if date_filter:
                     cur.execute(f"""
                         SELECT s.id, s.slot_start, s.slot_end, s.is_blocked,
-                               EXISTS(SELECT 1 FROM {S}.bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')) AS has_booking
+                               EXISTS(
+                                 SELECT 1 FROM {S}.bookings b
+                                 WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')
+                               ) AS has_booking
                         FROM {S}.slots s
                         WHERE s.master_id=%s AND s.slot_start::date=%s::date
                         ORDER BY s.slot_start
@@ -66,10 +71,13 @@ def handler(event: dict, context) -> dict:
                 else:
                     cur.execute(f"""
                         SELECT s.id, s.slot_start, s.slot_end, s.is_blocked,
-                               EXISTS(SELECT 1 FROM {S}.bookings b WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')) AS has_booking
+                               EXISTS(
+                                 SELECT 1 FROM {S}.bookings b
+                                 WHERE b.slot_id=s.id AND b.status IN ('pending','confirmed')
+                               ) AS has_booking
                         FROM {S}.slots s
                         WHERE s.master_id=%s AND s.slot_start >= NOW()
-                        ORDER BY s.slot_start LIMIT 60
+                        ORDER BY s.slot_start LIMIT 200
                     """, (master_id,))
                 cols = ["id", "slot_start", "slot_end", "is_blocked", "has_booking"]
                 result = []
@@ -86,20 +94,47 @@ def handler(event: dict, context) -> dict:
                     return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
                 _, master_id = row
                 body = json.loads(event.get("body") or "{}")
-                cur.execute(f"""
-                    INSERT INTO {S}.slots (master_id, slot_start, slot_end)
-                    VALUES (%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id
-                """, (master_id, body["slot_start"], body["slot_end"]))
-                res = cur.fetchone()
+                # Поддерживаем одиночный слот и массив
+                slots_input = body.get("slots") or [{"slot_start": body["slot_start"], "slot_end": body["slot_end"]}]
+                created = []
+                for sl in slots_input:
+                    cur.execute(f"""
+                        INSERT INTO {S}.slots (master_id, slot_start, slot_end)
+                        VALUES (%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id
+                    """, (master_id, sl["slot_start"], sl["slot_end"]))
+                    res = cur.fetchone()
+                    if res:
+                        created.append(res[0])
                 conn.commit()
-                return {"statusCode": 201, "headers": CORS, "body": json.dumps({"id": res[0] if res else None})}
+                return {"statusCode": 201, "headers": CORS, "body": json.dumps({"created": created})}
 
-        # ============ МАСТЕРА ============
+            elif method == "DELETE":
+                row = resolve_master(cur, get_token(event))
+                if not row:
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+                _, master_id = row
+                slot_id = params.get("slot_id")
+                if not slot_id:
+                    return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "slot_id required"})}
+                # Только если нет активных броней
+                cur.execute(f"""
+                    SELECT 1 FROM {S}.bookings
+                    WHERE slot_id=%s AND status IN ('pending','confirmed')
+                """, (slot_id,))
+                if cur.fetchone():
+                    return {"statusCode": 409, "headers": CORS,
+                            "body": json.dumps({"error": "Слот занят активной бронью"})}
+                cur.execute(f"UPDATE {S}.slots SET is_blocked=TRUE WHERE id=%s AND master_id=%s",
+                            (slot_id, master_id))
+                conn.commit()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+        # ──────────── СПИСОК / ПРОФИЛЬ ─────────────────────────────────────
         if method == "GET":
             master_id = params.get("master_id")
             if master_id:
                 cur.execute(f"""
-                    SELECT m.id, u.id AS user_id, u.name, m.about,
+                    SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
                            m.photo1_url, m.photo2_url, m.photo3_url,
                            COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
                            COUNT(DISTINCT r.id) AS review_count
@@ -108,23 +143,28 @@ def handler(event: dict, context) -> dict:
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
                     WHERE m.id=%s
-                    GROUP BY m.id, u.id, u.name, m.about, m.photo1_url, m.photo2_url, m.photo3_url
+                    GROUP BY m.id, u.id, u.name, m.about, m.address,
+                             m.photo1_url, m.photo2_url, m.photo3_url
                 """, (master_id,))
                 row = cur.fetchone()
                 if not row:
                     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "not found"})}
-                cols = ["id","user_id","name","about","photo1_url","photo2_url","photo3_url","rating","review_count"]
+                cols = ["id","user_id","name","about","address",
+                        "photo1_url","photo2_url","photo3_url","rating","review_count"]
                 master = dict(zip(cols, row))
                 master["rating"] = float(master["rating"])
                 cur.execute(f"""
                     SELECT id, title, description, price_type, price::float
-                    FROM {S}.services WHERE master_id=%s AND is_active=TRUE
+                    FROM {S}.services WHERE master_id=%s AND is_active=TRUE ORDER BY id
                 """, (master_id,))
-                master["services"] = [dict(zip(["id","title","description","price_type","price"], r)) for r in cur.fetchall()]
+                master["services"] = [
+                    dict(zip(["id","title","description","price_type","price"], r))
+                    for r in cur.fetchall()
+                ]
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps(master)}
             else:
                 cur.execute(f"""
-                    SELECT m.id, u.id AS user_id, u.name, m.about,
+                    SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
                            m.photo1_url, m.photo2_url, m.photo3_url,
                            COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
                            COUNT(DISTINCT r.id) AS review_count,
@@ -134,10 +174,12 @@ def handler(event: dict, context) -> dict:
                     LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
                     LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
                     LEFT JOIN {S}.services s ON s.master_id=m.id AND s.is_active=TRUE
-                    GROUP BY m.id, u.id, u.name, m.about, m.photo1_url, m.photo2_url, m.photo3_url
+                    GROUP BY m.id, u.id, u.name, m.about, m.address,
+                             m.photo1_url, m.photo2_url, m.photo3_url
                     ORDER BY rating DESC
                 """)
-                cols = ["id","user_id","name","about","photo1_url","photo2_url","photo3_url","rating","review_count","service_titles"]
+                cols = ["id","user_id","name","about","address",
+                        "photo1_url","photo2_url","photo3_url","rating","review_count","service_titles"]
                 result = []
                 for r in cur.fetchall():
                     row = dict(zip(cols, r))
@@ -145,21 +187,29 @@ def handler(event: dict, context) -> dict:
                     result.append(row)
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps(result)}
 
+        # ──────────── ОБНОВИТЬ ПРОФИЛЬ ─────────────────────────────────────
         elif method == "PUT":
             row = resolve_master(cur, get_token(event))
             if not row:
                 return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
-            _, master_id = row
+            user_id, master_id = row
             body = json.loads(event.get("body") or "{}")
-            fields, vals = [], []
-            for f in ["about", "photo1_url", "photo2_url", "photo3_url"]:
+
+            # Обновить имя в таблице users
+            if "name" in body:
+                cur.execute(f"UPDATE {S}.users SET name=%s WHERE id=%s", (body["name"], user_id))
+
+            # Обновить профиль мастера
+            master_fields, master_vals = [], []
+            for f in ["about", "address", "photo1_url", "photo2_url", "photo3_url"]:
                 if f in body:
-                    fields.append(f"{f}=%s")
-                    vals.append(body[f])
-            if fields:
-                vals.append(master_id)
-                cur.execute(f"UPDATE {S}.masters SET {', '.join(fields)} WHERE id=%s", vals)
-                conn.commit()
+                    master_fields.append(f"{f}=%s")
+                    master_vals.append(body[f])
+            if master_fields:
+                master_vals.append(master_id)
+                cur.execute(f"UPDATE {S}.masters SET {', '.join(master_fields)} WHERE id=%s", master_vals)
+
+            conn.commit()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
         return {"statusCode": 405, "headers": CORS, "body": json.dumps({"error": "method not allowed"})}
