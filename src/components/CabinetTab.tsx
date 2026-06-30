@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,11 @@ import {
 } from '@/types/app';
 
 // ─── TopBar ──────────────────────────────────────────────────────────────────
-export function TopBar({ session, onLogout }: { session: UserSession; onLogout: () => void }) {
+export function TopBar({ session, onLogout, onGoBooking }: {
+  session: UserSession;
+  onLogout: () => void;
+  onGoBooking?: (bookingId: number) => void;
+}) {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
@@ -35,7 +39,7 @@ export function TopBar({ session, onLogout }: { session: UserSession; onLogout: 
             <span className="text-sm font-medium leading-tight">{session.name}</span>
             <span className="text-xs text-muted-foreground leading-tight">{session.email}</span>
           </div>
-          <NotificationBell token={session.session_token} />
+          <NotificationBell token={session.session_token} onGoBooking={onGoBooking} />
           <button onClick={onLogout} className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary">
             <Icon name="LogOut" size={17} className="text-muted-foreground" />
           </button>
@@ -581,10 +585,11 @@ export function MasterCabinet({ session, setSession }: {
 }
 
 // ─── Мои записи ──────────────────────────────────────────────────────────────
-export function MyBookings({ session }: { session: UserSession }) {
+export function MyBookings({ session, focusBookingId }: { session: UserSession; focusBookingId?: number | null }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [ratingMap, setRatingMap] = useState<Record<number, number>>({});
+  const focusRef = useRef<HTMLDivElement>(null);
 
   const loadBookings = useCallback(async () => {
     const data = await bookingsApi.list(session.session_token, 'client');
@@ -594,10 +599,16 @@ export function MyBookings({ session }: { session: UserSession }) {
 
   useEffect(() => {
     loadBookings();
-    // Polling: статус заявок обновляется автоматически каждые 20 сек
     const interval = setInterval(loadBookings, 20_000);
     return () => clearInterval(interval);
   }, [loadBookings]);
+
+  useEffect(() => {
+    if (!focusBookingId || loading) return;
+    setTimeout(() => {
+      focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }, [focusBookingId, loading]);
 
   const cancelBooking = async (id: number) => {
     await bookingsApi.updateStatus(session.session_token, id, 'cancelled');
@@ -618,7 +629,10 @@ export function MyBookings({ session }: { session: UserSession }) {
   function BookingCard({ b }: { b: Booking }) {
     const mins = minutesLeft(b.confirm_by);
     return (
-      <Card className={`border-border p-3 ${b.status === 'confirmed' ? 'border-success/30 bg-success/5' : ''}`}>
+      <Card
+        ref={b.id === focusBookingId ? focusRef : undefined}
+        className={`border-border p-3 transition-all ${b.status === 'confirmed' ? 'border-success/30 bg-success/5' : ''} ${b.id === focusBookingId ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+      >
         <div className="flex items-center gap-3">
           {b.photo_url
             ? <Avatar className="h-10 w-10"><AvatarImage src={b.photo_url} /></Avatar>
@@ -690,7 +704,13 @@ export function MyBookings({ session }: { session: UserSession }) {
           <p className="text-muted-foreground">Записей пока нет</p>
         </div>
       ) : (
-        <Tabs defaultValue="pending">
+        <Tabs defaultValue={
+          focusBookingId
+            ? (bookings.find(b => b.id === focusBookingId)?.status === 'confirmed' ? 'confirmed'
+              : bookings.find(b => b.id === focusBookingId)?.status === 'done' ? 'done'
+              : 'pending')
+            : 'pending'
+        }>
           <TabsList className="grid w-full grid-cols-3 rounded-2xl">
             <TabsTrigger value="pending" className="rounded-xl text-xs">
               Ожидают{pending.length > 0 && (

@@ -230,7 +230,7 @@ def handler(event: dict, context) -> dict:
             # Уведомление мастеру — новая заявка
             cur.execute(f"""
                 SELECT u.name, u.email, s.title,
-                       TO_CHAR(sl.slot_start AT TIME ZONE 'Europe/Moscow', 'DD.MM HH24:MI') AS dt,
+                       TO_CHAR(sl.slot_start, 'DD.MM HH24:MI') AS dt,
                        mu.email AS master_email, mu.id AS master_user_id
                 FROM {S}.bookings b
                 JOIN {S}.users u ON u.id = b.client_id
@@ -298,7 +298,7 @@ def handler(event: dict, context) -> dict:
                 SELECT cu.id, cu.name, cu.email,
                        mu.id, mu.name, mu.email,
                        s.title,
-                       TO_CHAR(sl.slot_start AT TIME ZONE 'Europe/Moscow', 'DD.MM HH24:MI') AS dt
+                       TO_CHAR(sl.slot_start, 'DD.MM HH24:MI') AS dt
                 FROM {S}.bookings b
                 JOIN {S}.users cu ON cu.id = b.client_id
                 JOIN {S}.masters m ON m.id = b.master_id

@@ -11,6 +11,7 @@ const Index = () => {
   const [session, setSession] = useState<UserSession | null>(null);
   const [tab, setTab] = useState<Tab>('home');
   const [scheduleMaster, setScheduleMaster] = useState<Master | null>(null);
+  const [focusBookingId, setFocusBookingId] = useState<number | null>(null);
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
@@ -43,14 +44,14 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background font-sans">
-      <TopBar session={session} onLogout={handleLogout} />
+      <TopBar session={session} onLogout={handleLogout} onGoBooking={id => { setFocusBookingId(id); setTab('bookings'); }} />
       <main className="mx-auto max-w-2xl pb-16">
         {tab === 'home'     && <Home onSchedule={goSchedule} session={session} />}
         {tab === 'schedule' && <Schedule session={session} focusMaster={scheduleMaster} />}
         {tab === 'master'   && (
           <MasterCabinet session={session} setSession={s => { setSession(s); saveSession(s); }} />
         )}
-        {tab === 'bookings' && <MyBookings session={session} />}
+        {tab === 'bookings' && <MyBookings session={session} focusBookingId={focusBookingId} />}
         {tab === 'admin'    && session.is_admin && <AdminPanel session={session} />}
       </main>
       <BottomNav

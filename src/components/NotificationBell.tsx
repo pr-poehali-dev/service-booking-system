@@ -14,6 +14,7 @@ interface Notification {
 interface Props {
   token: string;
   onNewNotification?: () => void;
+  onGoBooking?: (bookingId: number) => void;
 }
 
 function timeAgo(iso: string) {
@@ -24,7 +25,7 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString('ru', { day: 'numeric', month: 'short' });
 }
 
-export default function NotificationBell({ token, onNewNotification }: Props) {
+export default function NotificationBell({ token, onNewNotification, onGoBooking }: Props) {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -111,17 +112,24 @@ export default function NotificationBell({ token, onNewNotification }: Props) {
               items.map(n => (
                 <div
                   key={n.id}
+                  onClick={() => {
+                    if (n.booking_id && onGoBooking) {
+                      onGoBooking(n.booking_id);
+                      setOpen(false);
+                    }
+                  }}
                   className={`border-b border-border/50 px-4 py-3 last:border-0 ${
                     !n.is_read ? 'bg-primary/5' : ''
-                  }`}
+                  } ${n.booking_id && onGoBooking ? 'cursor-pointer hover:bg-secondary/60' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className={`text-[13px] font-medium leading-tight ${!n.is_read ? 'text-foreground' : 'text-muted-foreground'}`}>
                       {n.title}
                     </p>
-                    {!n.is_read && (
-                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {!n.is_read && <span className="mt-0.5 h-2 w-2 rounded-full bg-primary" />}
+                      {n.booking_id && onGoBooking && <Icon name="ChevronRight" size={12} className="text-muted-foreground/50" />}
+                    </div>
                   </div>
                   <p className="mt-0.5 text-[12px] text-muted-foreground leading-snug">{n.body}</p>
                   <p className="mt-1 text-[11px] text-muted-foreground/60">{timeAgo(n.created_at)}</p>
