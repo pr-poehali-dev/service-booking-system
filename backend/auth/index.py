@@ -29,7 +29,7 @@ def get_token(event):
 
 
 def send_email(to_email: str, code: str) -> bool:
-    password = os.environ.get("YANDEX_EMAIL_PASSWORD", "")
+    password = os.environ.get("YANDEX_SMTP_PASSWORD") or os.environ.get("YANDEX_EMAIL_PASSWORD", "")
     if not password:
         print(f"[DEV] OTP for {to_email}: {code}")
         return True
