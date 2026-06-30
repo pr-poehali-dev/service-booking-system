@@ -4,38 +4,38 @@
 
 @layer base {
   :root {
-    --background: 210 33% 99%;
-    --foreground: 218 41% 14%;
+    --background: 350 60% 99%;
+    --foreground: 335 30% 22%;
 
     --card: 0 0% 100%;
-    --card-foreground: 218 41% 14%;
+    --card-foreground: 335 30% 22%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 218 41% 14%;
+    --popover-foreground: 335 30% 22%;
 
-    --primary: 218 64% 22%;
-    --primary-foreground: 210 40% 99%;
+    --primary: 340 62% 62%;
+    --primary-foreground: 350 100% 99%;
 
-    --secondary: 214 32% 95%;
-    --secondary-foreground: 218 64% 22%;
+    --secondary: 345 60% 96%;
+    --secondary-foreground: 338 40% 42%;
 
-    --muted: 214 32% 95%;
-    --muted-foreground: 217 16% 47%;
+    --muted: 345 45% 95%;
+    --muted-foreground: 335 14% 55%;
 
-    --accent: 199 89% 48%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 28 90% 78%;
+    --accent-foreground: 24 50% 28%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 64%;
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 152 60% 40%;
+    --success: 150 45% 56%;
     --success-foreground: 0 0% 100%;
 
-    --border: 214 28% 89%;
-    --input: 214 28% 89%;
-    --ring: 218 64% 22%;
+    --border: 345 40% 92%;
+    --input: 345 40% 92%;
+    --ring: 340 62% 62%;
 
-    --radius: 0.625rem;
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -106,7 +106,7 @@
 
 @layer utilities {
   .font-display {
-    font-family: "IBM Plex Sans", sans-serif;
+    font-family: "Rubik", sans-serif;
     letter-spacing: -0.02em;
   }
   .font-mono-tnum {
