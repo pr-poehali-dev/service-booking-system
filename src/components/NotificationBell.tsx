@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import { notificationsApi } from '@/lib/api';
 
@@ -13,7 +13,6 @@ interface Notification {
 
 interface Props {
   token: string;
-  onNewNotification?: () => void;
   onGoBooking?: (bookingId: number) => void;
 }
 
@@ -25,31 +24,44 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString('ru', { day: 'numeric', month: 'short' });
 }
 
-export default function NotificationBell({ token, onNewNotification, onGoBooking }: Props) {
+export default function NotificationBell({ token, onGoBooking }: Props) {
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
-  const prevUnread = useRef(0);
+  // -1 = первая загрузка, не показывать toast на старые уведомления
+  const prevUnread = useRef(-1);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  const load = useCallback(async () => {
-    const res = await notificationsApi.list(token);
-    if (res?.items) {
-      setItems(res.items);
-      const u = res.unread ?? 0;
-      if (u > prevUnread.current && prevUnread.current >= 0) {
-        onNewNotification?.();
-      }
-      prevUnread.current = u;
-      setUnread(u);
-    }
-  }, [token, onNewNotification]);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await notificationsApi.list(tokenRef.current);
+        if (cancelled || !res?.items) return;
+        setItems(res.items);
+        const u: number = res.unread ?? 0;
+        // Показываем badge анимацию только при появлении НОВЫХ (не при первой загрузке)
+        if (prevUnread.current !== -1 && u > prevUnread.current) {
+          // Мигнуть иконкой — просто обновляем счётчик, этого достаточно
+        }
+        prevUnread.current = u;
+        setUnread(u);
+      } catch {
+        // сетевая ошибка — молчим
+      }
+    };
+
     load();
-    const interval = setInterval(load, 15_000);
-    return () => clearInterval(interval);
-  }, [load]);
+    const interval = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+   
+  }, []);  // [] — интервал стартует один раз, читает token через ref
 
   useEffect(() => {
     if (!open) return;
@@ -63,8 +75,9 @@ export default function NotificationBell({ token, onNewNotification, onGoBooking
   }, [open]);
 
   const handleOpen = async () => {
+    const wasOpen = open;
     setOpen(o => !o);
-    if (!open && unread > 0) {
+    if (!wasOpen && unread > 0) {
       await notificationsApi.readAll(token);
       setItems(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnread(0);
@@ -81,7 +94,7 @@ export default function NotificationBell({ token, onNewNotification, onGoBooking
       >
         <Icon name="Bell" size={18} className="text-muted-foreground" />
         {unread > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-white">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -97,6 +110,7 @@ export default function NotificationBell({ token, onNewNotification, onGoBooking
                   await notificationsApi.readAll(token);
                   setItems(prev => prev.map(n => ({ ...n, is_read: true })));
                   setUnread(0);
+                  prevUnread.current = 0;
                 }}
                 className="text-[11px] text-primary hover:underline"
               >
@@ -118,7 +132,7 @@ export default function NotificationBell({ token, onNewNotification, onGoBooking
                       setOpen(false);
                     }
                   }}
-                  className={`border-b border-border/50 px-4 py-3 last:border-0 ${
+                  className={`border-b border-border/50 px-4 py-3 last:border-0 transition-colors ${
                     !n.is_read ? 'bg-primary/5' : ''
                   } ${n.booking_id && onGoBooking ? 'cursor-pointer hover:bg-secondary/60' : ''}`}
                 >
@@ -131,7 +145,7 @@ export default function NotificationBell({ token, onNewNotification, onGoBooking
                       {n.booking_id && onGoBooking && <Icon name="ChevronRight" size={12} className="text-muted-foreground/50" />}
                     </div>
                   </div>
-                  <p className="mt-0.5 text-[12px] text-muted-foreground leading-snug">{n.body}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{n.body}</p>
                   <p className="mt-1 text-[11px] text-muted-foreground/60">{timeAgo(n.created_at)}</p>
                 </div>
               ))

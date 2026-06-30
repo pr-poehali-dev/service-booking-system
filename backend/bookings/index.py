@@ -38,12 +38,20 @@ background:#fff9fb;border-radius:16px"><h2 style="color:#d45a7a">🌸 Лепес
 
 
 def push_notify(cur, conn, user_id: int, booking_id: int, title: str, body: str, email: str):
-    S = "t_p84631928_service_booking_syst"
-    cur.execute(
-        f"INSERT INTO {S}.notifications (user_id, booking_id, title, body) VALUES (%s,%s,%s,%s)",
-        (user_id, booking_id, title, body)
-    )
-    conn.commit()
+    S_N = "t_p84631928_service_booking_syst"
+    try:
+        cur.execute(
+            f"INSERT INTO {S_N}.notifications (user_id, booking_id, title, body) VALUES (%s,%s,%s,%s)",
+            (user_id, booking_id, title, body)
+        )
+        conn.commit()
+        print(f"[notify] OK user={user_id} title={title!r}")
+    except Exception as e:
+        print(f"[notify] DB error: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
     _send_email(email, f"Лепесток: {title}", body)
 
 S = "t_p84631928_service_booking_syst"
@@ -337,13 +345,21 @@ def handler(event: dict, context) -> dict:
 
             # Уведомляем клиентов, чьи конкурирующие брони автоматически отменились
             for other_bid, other_client_id in cancelled_ids:
-                cur.execute(f"SELECT email FROM {S}.users WHERE id=%s", (other_client_id,))
-                row = cur.fetchone()
-                if row:
+                cur.execute(f"""
+                    SELECT u.email, s.title, TO_CHAR(sl.slot_start, 'DD.MM HH24:MI')
+                    FROM {S}.bookings b
+                    JOIN {S}.users u ON u.id = b.client_id
+                    JOIN {S}.services s ON s.id = b.service_id
+                    JOIN {S}.slots sl ON sl.id = b.slot_id
+                    WHERE b.id=%s
+                """, (other_bid,))
+                orow = cur.fetchone()
+                if orow:
+                    o_email, o_svc, o_dt = orow
                     push_notify(cur, conn, other_client_id, other_bid,
                         "Запись отменена",
-                        f"Другой клиент был принят на этот слот — ваша заявка на «{svc}» — {dt} отменена.",
-                        row[0])
+                        f"Другой клиент был принят на этот слот — ваша заявка на «{o_svc}» — {o_dt} отменена.",
+                        o_email)
 
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
