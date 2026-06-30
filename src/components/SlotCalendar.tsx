@@ -188,7 +188,7 @@ export default function SlotCalendar({
                         picked
                           ? 'bg-primary text-primary-foreground'
                           : confirmed
-                          ? 'cursor-not-allowed bg-muted opacity-40'
+                          ? 'cursor-not-allowed bg-destructive/40 text-destructive-foreground opacity-80'
                           : contested
                           ? 'bg-secondary text-muted-foreground hover:bg-secondary/80'
                           : 'bg-success/25 text-success hover:bg-success/40'
@@ -214,7 +214,9 @@ export default function SlotCalendar({
                         : isSel
                         ? 'bg-accent/70 text-accent-foreground ring-1 ring-accent'
                         : isActive
-                        ? slot.has_booking
+                        ? slot.has_confirmed
+                          ? 'bg-destructive/50 text-destructive-foreground'
+                          : slot.has_booking
                           ? 'bg-primary/50 text-primary'
                           : 'bg-primary/25 text-primary'
                         : 'bg-muted/30 hover:bg-secondary'
