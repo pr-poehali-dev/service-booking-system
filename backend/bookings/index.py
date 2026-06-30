@@ -5,9 +5,46 @@ GET  /?action=expire — отменить просроченные pending-бр�
 POST /              — создать бронь (нельзя бронировать самого себя)
 PUT  /?booking_id=N — изменить статус
 """
-import json, os
+import json, os, smtplib
 from datetime import datetime, timezone, timedelta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import psycopg2
+
+FROM_EMAIL = "lepestok-servis@yandex.ru"
+
+
+def _send_email(to_email: str, subject: str, body_text: str):
+    password = os.environ.get("YANDEX_SMTP_PASSWORD") or os.environ.get("YANDEX_EMAIL_PASSWORD", "")
+    if not password:
+        print(f"[DEV] email to {to_email}: {subject}")
+        return
+    try:
+        html = f"""<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;
+background:#fff9fb;border-radius:16px"><h2 style="color:#d45a7a">🌸 Лепесток</h2>
+<p style="color:#444;white-space:pre-line">{body_text}</p>
+<p style="color:#aaa;font-size:12px;margin-top:24px">Это автоматическое уведомление.</p></div>"""
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = FROM_EMAIL
+        msg["To"] = to_email
+        msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        with smtplib.SMTP_SSL("smtp.yandex.ru", 465) as srv:
+            srv.login(FROM_EMAIL, password)
+            srv.sendmail(FROM_EMAIL, to_email, msg.as_string())
+    except Exception as e:
+        print(f"email error: {e}")
+
+
+def push_notify(cur, conn, user_id: int, booking_id: int, title: str, body: str, email: str):
+    S = "t_p84631928_service_booking_syst"
+    cur.execute(
+        f"INSERT INTO {S}.notifications (user_id, booking_id, title, body) VALUES (%s,%s,%s,%s)",
+        (user_id, booking_id, title, body)
+    )
+    conn.commit()
+    _send_email(email, f"Лепесток: {title}", body)
 
 S = "t_p84631928_service_booking_syst"
 CORS = {
@@ -189,6 +226,28 @@ def handler(event: dict, context) -> dict:
             """, (user_id, target_master_id, service_id, slot_id, confirm_by))
             new_id = cur.fetchone()[0]
             conn.commit()
+
+            # Уведомление мастеру — новая заявка
+            cur.execute(f"""
+                SELECT u.name, u.email, s.title,
+                       TO_CHAR(sl.slot_start AT TIME ZONE 'Europe/Moscow', 'DD.MM HH24:MI') AS dt,
+                       mu.email AS master_email, mu.id AS master_user_id
+                FROM {S}.bookings b
+                JOIN {S}.users u ON u.id = b.client_id
+                JOIN {S}.services s ON s.id = b.service_id
+                JOIN {S}.slots sl ON sl.id = b.slot_id
+                JOIN {S}.masters m ON m.id = b.master_id
+                JOIN {S}.users mu ON mu.id = m.user_id
+                WHERE b.id=%s
+            """, (new_id,))
+            r = cur.fetchone()
+            if r:
+                client_name, _, svc_title, dt, master_email, master_user_id = r
+                push_notify(cur, conn, master_user_id, new_id,
+                    "Новая заявка",
+                    f"Клиент {client_name} записался на услугу «{svc_title}» — {dt}.",
+                    master_email)
+
             return {"statusCode": 201, "headers": CORS, "body": json.dumps({"id": new_id})}
 
         # ── PUT — изменить статус ─────────────────────────────────────────────
@@ -223,13 +282,69 @@ def handler(event: dict, context) -> dict:
             """, (new_status, booking_id))
 
             # Подтверждение — отменяем все остальные pending-брони на тот же слот (любые клиенты)
+            cancelled_ids = []
             if new_status == "confirmed":
                 cur.execute(f"""
                     UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
                     WHERE slot_id=%s AND id<>%s AND status='pending'
+                    RETURNING id, client_id
                 """, (b_slot, booking_id))
+                cancelled_ids = cur.fetchall()
 
             conn.commit()
+
+            # Получаем данные для уведомлений
+            cur.execute(f"""
+                SELECT cu.id, cu.name, cu.email,
+                       mu.id, mu.name, mu.email,
+                       s.title,
+                       TO_CHAR(sl.slot_start AT TIME ZONE 'Europe/Moscow', 'DD.MM HH24:MI') AS dt
+                FROM {S}.bookings b
+                JOIN {S}.users cu ON cu.id = b.client_id
+                JOIN {S}.masters m ON m.id = b.master_id
+                JOIN {S}.users mu ON mu.id = m.user_id
+                JOIN {S}.services s ON s.id = b.service_id
+                JOIN {S}.slots sl ON sl.id = b.slot_id
+                WHERE b.id=%s
+            """, (booking_id,))
+            nd = cur.fetchone()
+            if nd:
+                c_uid, c_name, c_email, m_uid, m_name, m_email, svc, dt = nd
+                bid_i = int(booking_id)
+
+                if new_status == "confirmed":
+                    push_notify(cur, conn, c_uid, bid_i,
+                        "Заявка подтверждена",
+                        f"Мастер {m_name} подтвердил вашу запись на «{svc}» — {dt}.",
+                        c_email)
+                elif new_status == "cancelled":
+                    # Кто отменил — уведомляем другую сторону
+                    if is_master:
+                        push_notify(cur, conn, c_uid, bid_i,
+                            "Запись отменена",
+                            f"Мастер {m_name} отменил вашу запись на «{svc}» — {dt}.",
+                            c_email)
+                    else:
+                        push_notify(cur, conn, m_uid, bid_i,
+                            "Клиент отменил запись",
+                            f"Клиент {c_name} отменил запись на «{svc}» — {dt}.",
+                            m_email)
+                elif new_status == "done":
+                    push_notify(cur, conn, c_uid, bid_i,
+                        "Услуга оказана",
+                        f"Мастер {m_name} отметил оказание услуги «{svc}». Оцените визит!",
+                        c_email)
+
+            # Уведомляем клиентов, чьи конкурирующие брони автоматически отменились
+            for other_bid, other_client_id in cancelled_ids:
+                cur.execute(f"SELECT email FROM {S}.users WHERE id=%s", (other_client_id,))
+                row = cur.fetchone()
+                if row:
+                    push_notify(cur, conn, other_client_id, other_bid,
+                        "Запись отменена",
+                        f"Другой клиент был принят на этот слот — ваша заявка на «{svc}» — {dt} отменена.",
+                        row[0])
+
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
     finally:

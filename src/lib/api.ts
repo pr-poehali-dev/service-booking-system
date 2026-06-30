@@ -1,11 +1,12 @@
 const URLS = {
-  auth:     'https://functions.poehali.dev/a1386d54-64d7-48dd-8267-fb096fd7e8aa',
-  masters:  'https://functions.poehali.dev/d35c66b8-5b08-4553-9a30-083fd82469c6',
-  bookings: 'https://functions.poehali.dev/b421637b-0ba0-45a4-a659-c178ad450edb',
-  ratings:  'https://functions.poehali.dev/5ec6be20-e414-43ba-8bed-413ecff8aeaf',
-  services: 'https://functions.poehali.dev/e82f29da-cb72-405a-bb0e-49d14495fe2a',
-  upload:   'https://functions.poehali.dev/a26c9112-2983-4971-a812-01169def416c',
-  admin:    'https://functions.poehali.dev/8649296a-7d9c-4030-ac90-1157baff0c63',
+  auth:          'https://functions.poehali.dev/a1386d54-64d7-48dd-8267-fb096fd7e8aa',
+  masters:       'https://functions.poehali.dev/d35c66b8-5b08-4553-9a30-083fd82469c6',
+  bookings:      'https://functions.poehali.dev/b421637b-0ba0-45a4-a659-c178ad450edb',
+  ratings:       'https://functions.poehali.dev/5ec6be20-e414-43ba-8bed-413ecff8aeaf',
+  services:      'https://functions.poehali.dev/e82f29da-cb72-405a-bb0e-49d14495fe2a',
+  upload:        'https://functions.poehali.dev/a26c9112-2983-4971-a812-01169def416c',
+  admin:         'https://functions.poehali.dev/8649296a-7d9c-4030-ac90-1157baff0c63',
+  notifications: 'https://functions.poehali.dev/76240e24-9a15-4a44-8901-9d16ce665dbf',
 };
 
 async function req(url: string, opts: RequestInit = {}) {
@@ -138,6 +139,22 @@ export async function uploadPhoto(
     reader.readAsDataURL(file);
   });
 }
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+export const notificationsApi = {
+  list: (token: string) =>
+    req(URLS.notifications, { headers: { 'X-Session-Token': token } }),
+
+  readOne: (token: string, id: number) =>
+    req(`${URLS.notifications}?action=read&id=${id}`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+    }),
+
+  readAll: (token: string) =>
+    req(`${URLS.notifications}?action=read_all`, {
+      method: 'POST', headers: { 'X-Session-Token': token },
+    }),
+};
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminApi = {

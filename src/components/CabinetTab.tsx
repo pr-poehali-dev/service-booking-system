@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from '@/components/ui/icon';
+import NotificationBell from '@/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -34,6 +35,7 @@ export function TopBar({ session, onLogout }: { session: UserSession; onLogout: 
             <span className="text-sm font-medium leading-tight">{session.name}</span>
             <span className="text-xs text-muted-foreground leading-tight">{session.email}</span>
           </div>
+          <NotificationBell token={session.session_token} />
           <button onClick={onLogout} className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-secondary">
             <Icon name="LogOut" size={17} className="text-muted-foreground" />
           </button>
