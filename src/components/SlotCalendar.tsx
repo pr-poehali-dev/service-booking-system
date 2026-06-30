@@ -62,7 +62,13 @@ export default function SlotCalendar({
     if (Array.isArray(res)) setSlots(res);
   }, [masterId]);
 
-  useEffect(() => { loadSlots(); }, [loadSlots]);
+  useEffect(() => {
+    loadSlots();
+    if (!readOnly) return;
+    // В режиме выбора слота клиентом — обновляем состояния каждые 10 сек
+    const interval = setInterval(loadSlots, 10_000);
+    return () => clearInterval(interval);
+  }, [loadSlots, readOnly]);
 
   // Индекс "YYYY-MM-DD:H" → Slot
   const slotIndex: Record<string, Slot> = {};
