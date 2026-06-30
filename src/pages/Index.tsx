@@ -45,7 +45,7 @@ const Index = () => {
     <div className="min-h-screen bg-background font-sans">
       <TopBar session={session} onLogout={handleLogout} />
       <main className="mx-auto max-w-2xl pb-16">
-        {tab === 'home'     && <Home onSchedule={goSchedule} />}
+        {tab === 'home'     && <Home onSchedule={goSchedule} session={session} />}
         {tab === 'schedule' && <Schedule session={session} focusMaster={scheduleMaster} />}
         {tab === 'master'   && (
           <MasterCabinet session={session} setSession={s => { setSession(s); saveSession(s); }} />

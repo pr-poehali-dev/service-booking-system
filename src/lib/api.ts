@@ -107,6 +107,10 @@ export const ratingsApi = {
   forClient: (userId: number) =>
     req(`${URLS.ratings}?target_user_id=${userId}&from_role=master`),
 
+  // Оценки, которые клиент поставил мастерам (from_role=client, target=мастер)
+  byClient: (token: string) =>
+    req(`${URLS.ratings}?action=by_client`, { headers: { 'X-Session-Token': token } }),
+
   add: (token: string, data: { booking_id: number; score: number; comment?: string }) =>
     req(URLS.ratings, { method: 'POST', headers: { 'X-Session-Token': token }, body: JSON.stringify(data) }),
 };

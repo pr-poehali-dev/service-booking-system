@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { mastersApi, servicesApi, bookingsApi, type UserSession } from '@/lib/api';
+import { mastersApi, servicesApi, bookingsApi, ratingsApi, type UserSession } from '@/lib/api';
 import SlotCalendar from '@/components/SlotCalendar';
 import { ServiceCard } from '@/components/CatalogTab';
 import { type Master, type Service, type SlotT, MAX_SLOTS_PER_MASTER, fmtPrice } from '@/types/app';
@@ -19,9 +19,17 @@ export default function Schedule({ session, focusMaster }: {
   const [pickedSlots, setPickedSlots] = useState<Record<number, number[]>>({});
   const [sending, setSending] = useState(false);
   const [svcFilter, setSvcFilter] = useState('');
+  // Оценки клиента мастерам: { master_id -> avg_score }
+  const [clientRatings, setClientRatings] = useState<Record<string, number>>({});
 
   const loadServices = useCallback(async () => {
-    const data = await mastersApi.list();
+    const [data, ratings] = await Promise.all([
+      mastersApi.list(),
+      ratingsApi.byClient(session.session_token),
+    ]);
+    if (typeof ratings === 'object' && ratings !== null && !Array.isArray(ratings)) {
+      setClientRatings(ratings as Record<string, number>);
+    }
     if (!Array.isArray(data)) { setLoading(false); return; }
     const list: Master[] = (focusMaster
       ? data.filter((m: Master) => m.id === focusMaster.id)
@@ -34,7 +42,7 @@ export default function Schedule({ session, focusMaster }: {
     }));
     setServices(svList);
     setLoading(false);
-  }, [focusMaster, session.id]);
+  }, [focusMaster, session.id, session.session_token]);
 
   useEffect(() => {
     setLoading(true);
@@ -123,9 +131,16 @@ export default function Schedule({ session, focusMaster }: {
     );
   }
 
+  const sortedServices = [...services].sort((a, b) => {
+    const rA = clientRatings[String(a.master.id)] ?? 0;
+    const rB = clientRatings[String(b.master.id)] ?? 0;
+    const preferred = (r: number) => r > 3 ? 1 : 0;
+    return preferred(rB) - preferred(rA);
+  });
+
   const filteredSvcs = svcFilter.trim()
-    ? services.filter(({ service }) => service.title.toLowerCase().includes(svcFilter.toLowerCase()))
-    : services;
+    ? sortedServices.filter(({ service }) => service.title.toLowerCase().includes(svcFilter.toLowerCase()))
+    : sortedServices;
 
   return (
     <div className="px-4 pb-6 pt-5">

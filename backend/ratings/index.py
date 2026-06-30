@@ -31,6 +31,27 @@ def handler(event: dict, context) -> dict:
 
     try:
         if method == "GET":
+            action = params.get("action", "")
+
+            # Оценки, которые клиент поставил мастерам: {master_id -> avg_score}
+            if action == "by_client":
+                if not token:
+                    return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "unauthorized"})}
+                cur.execute(f"SELECT id FROM {S}.users WHERE session_token=%s", (token,))
+                u = cur.fetchone()
+                if not u:
+                    return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "forbidden"})}
+                client_id = u[0]
+                cur.execute(f"""
+                    SELECT b.master_id, ROUND(AVG(r.score)::numeric, 1) AS avg_score
+                    FROM {S}.ratings r
+                    JOIN {S}.bookings b ON b.id = r.booking_id
+                    WHERE r.from_role = 'client' AND b.client_id = %s
+                    GROUP BY b.master_id
+                """, (client_id,))
+                result = {str(row[0]): float(row[1]) for row in cur.fetchall()}
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps(result)}
+
             target_user_id = params.get("target_user_id")
             from_role = params.get("from_role", "master")
             if not target_user_id:

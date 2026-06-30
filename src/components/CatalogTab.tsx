@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { mastersApi } from '@/lib/api';
+import { mastersApi, ratingsApi, type UserSession } from '@/lib/api';
 import { type Master, type Service, fmtPrice, svcPhotos } from '@/types/app';
 
 const ADDR_FILTER_KEY = 'lepestok_addr_filter';
@@ -88,7 +88,15 @@ export function ServiceCard({ master, service, onBook }: {
               <p className="text-sm font-semibold leading-snug">{service.title}</p>
               <span className="shrink-0 font-mono-tnum text-sm font-bold text-primary">{fmtPrice(service)}</span>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{master.name}</p>
+            <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+              <span>{master.name}</span>
+              {master.rating > 0 && (
+                <span className="flex items-center gap-0.5">
+                  <Icon name="Star" size={10} className="fill-primary text-primary" />
+                  {master.rating}
+                </span>
+              )}
+            </div>
             {service.description && (
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description}</p>
             )}
@@ -154,28 +162,45 @@ export function ServiceCard({ master, service, onBook }: {
 }
 
 // ─── Каталог ─────────────────────────────────────────────────────────────────
-export default function Home({ onSchedule }: { onSchedule: (m: Master) => void }) {
+export default function Home({ onSchedule, session }: {
+  onSchedule: (m: Master) => void; session?: UserSession;
+}) {
   const [masters, setMasters] = useState<Master[]>([]);
   const [loading, setLoading] = useState(true);
   const [addrFilter, setAddrFilter] = useState<string>(
     () => localStorage.getItem(ADDR_FILTER_KEY) ?? ''
   );
+  const [clientRatings, setClientRatings] = useState<Record<string, number>>({});
 
   useEffect(() => {
     mastersApi.list().then(data => {
       if (Array.isArray(data)) setMasters(data);
       setLoading(false);
     });
-  }, []);
+    if (session?.session_token) {
+      ratingsApi.byClient(session.session_token).then(r => {
+        if (typeof r === 'object' && r !== null && !Array.isArray(r)) {
+          setClientRatings(r as Record<string, number>);
+        }
+      });
+    }
+  }, [session?.session_token]);
 
   const handleAddrChange = (v: string) => {
     setAddrFilter(v);
     localStorage.setItem(ADDR_FILTER_KEY, v);
   };
 
-  const filtered = addrFilter.trim()
+  const addrFiltered = addrFilter.trim()
     ? masters.filter(m => m.address?.toLowerCase().includes(addrFilter.toLowerCase()))
     : masters;
+
+  const filtered = [...addrFiltered].sort((a, b) => {
+    const rA = clientRatings[String(a.id)] ?? 0;
+    const rB = clientRatings[String(b.id)] ?? 0;
+    const preferred = (r: number) => r > 3 ? 1 : 0;
+    return preferred(rB) - preferred(rA);
+  });
 
   return (
     <div className="space-y-5 px-4 pb-6 pt-5">
