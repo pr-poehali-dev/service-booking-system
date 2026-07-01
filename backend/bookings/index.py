@@ -83,6 +83,8 @@ def resolve_user(cur, token):
     if not row:
         return None
     user_id, is_master = row
+    safe_token = token.replace("'", "''")
+    cur.execute(f"UPDATE {S}.users SET last_seen=NOW() WHERE session_token='{safe_token}'")
     master_id = None
     if is_master:
         cur.execute(f"SELECT id FROM {S}.masters WHERE user_id=%s", (user_id,))

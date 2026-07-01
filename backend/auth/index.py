@@ -161,7 +161,8 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"UPDATE {S}.otp_codes SET used=TRUE WHERE id=%s", (otp[0],))
 
             token = str(uuid.uuid4())
-            cur.execute(f"UPDATE {S}.users SET session_token=%s WHERE email=%s", (token, email))
+            safe_email = email.replace("'", "''")
+            cur.execute(f"UPDATE {S}.users SET session_token='{token}', last_seen=NOW() WHERE email='{safe_email}'")
             conn.commit()
 
             row = get_user_row(cur, token)

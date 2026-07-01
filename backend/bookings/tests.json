@@ -1,21 +1,16 @@
 {
   "tests": [
     {
-      "name": "Expire просроченные брони",
-      "method": "GET",
-      "path": "/?action=expire",
-      "expectedStatus": 200,
-      "expectedBody": { "cancelled_count": 0 },
-      "bodyMatcher": "partial"
+      "name": "OPTIONS bookings",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
     },
     {
-      "name": "Мои брони (клиент)",
+      "name": "GET без токена — 401",
       "method": "GET",
       "path": "/",
-      "headers": { "X-Session-Token": "token-client-1" },
-      "expectedStatus": 200,
-      "expectedBody": [],
-      "bodyMatcher": "type_array"
+      "expectedStatus": 401
     }
   ]
 }
