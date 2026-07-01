@@ -18,17 +18,25 @@ const Index = () => {
   useEffect(() => {
     const stored = loadSession();
     if (stored) {
-      setSession(stored);
-      // Обновляем сессию с сервера чтобы подтянуть актуальный master_id
+      // Обновляем сессию с сервера перед рендером — чтобы is_admin и master_id были актуальны
       authApi.me(stored.session_token).then(fresh => {
         if (fresh?.id) {
           const updated = { ...stored, ...fresh, session_token: stored.session_token };
           setSession(updated);
           saveSession(updated);
+        } else {
+          // Токен протух — показываем экран входа
+          clearSession();
         }
+        setBooting(false);
+      }).catch(() => {
+        // Нет сети — используем кэш из localStorage
+        setSession(stored);
+        setBooting(false);
       });
+    } else {
+      setBooting(false);
     }
-    setBooting(false);
   }, []);
 
   const handleLogin = (s: UserSession) => {

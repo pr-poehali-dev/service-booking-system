@@ -49,6 +49,7 @@ export default function AuthScreen({ onLogin }: Props) {
         name: res.name,
         email: res.email,
         is_master: res.is_master ?? false,
+        is_admin: res.is_admin ?? false,
         master_id: res.master_id ?? null,
         address: res.address ?? null,
         session_token: res.session_token,
