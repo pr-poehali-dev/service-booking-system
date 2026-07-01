@@ -380,7 +380,7 @@ export function MasterCabinet({ session, setSession, focusBookingId, focusFilter
               { key: 'confirmed', label: 'Активные',  count: confirmed.length },
               { key: 'done',      label: 'Завершены', count: done.length },
             ];
-            const filtered = bookings.filter(b => b.status === bookingFilter);
+            const filtered = bookingFilter === 'done' ? done : bookingFilter === 'confirmed' ? confirmed : pending;
             return (
               <>
                 <div className="flex gap-1">
