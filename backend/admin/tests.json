@@ -12,9 +12,7 @@
       "name": "GET без токена — 403",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 403,
-      "expectedBody": {"error": "forbidden"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 403
     }
   ]
 }

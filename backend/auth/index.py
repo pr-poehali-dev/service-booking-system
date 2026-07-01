@@ -92,6 +92,8 @@ def handler(event: dict, context) -> dict:
             row = get_user_row(cur, token)
             if not row:
                 return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "invalid token"})}
+            cur.execute(f"UPDATE {S}.users SET last_seen=NOW() WHERE session_token=%s", (token,))
+            conn.commit()
             cols = ["id", "name", "email", "is_master", "master_id", "address", "is_admin"]
             return {"statusCode": 200, "headers": CORS, "body": json.dumps(dict(zip(cols, row)))}
 

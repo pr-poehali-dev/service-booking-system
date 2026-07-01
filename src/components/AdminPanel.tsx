@@ -12,20 +12,40 @@ interface AdminService {
   is_blocked: boolean; booking_count: number;
 }
 interface AdminMaster {
-  id: number; name: string; email: string;
+  id: number; user_id: number; name: string; email: string;
   is_blocked: boolean; rating: number;
   booking_count: number; ref_count: number; services: AdminService[];
+  last_seen: string | null; is_master: true;
+}
+interface AdminClient {
+  user_id: number; name: string; email: string;
+  booking_count: number; last_seen: string | null; is_master: false;
+}
+
+function fmtLastSeen(iso: string | null): string {
+  if (!iso) return 'никогда';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (diff < 60) return 'только что';
+  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`;
+  if (diff < 86400 * 2) return 'вчера';
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
 export default function AdminPanel({ session }: { session: UserSession }) {
   const [masters, setMasters] = useState<AdminMaster[]>([]);
+  const [clients, setClients] = useState<AdminClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<'masters' | 'clients'>('masters');
 
   const load = useCallback(async () => {
     const data = await adminApi.list(session.session_token);
-    if (Array.isArray(data)) setMasters(data);
+    if (data?.masters) setMasters(data.masters);
+    if (data?.clients) setClients(data.clients);
     setLoading(false);
   }, [session.session_token]);
 
@@ -64,102 +84,148 @@ export default function AdminPanel({ session }: { session: UserSession }) {
         <h2 className="font-display text-lg font-bold">Панель администратора</h2>
       </div>
 
+      {/* Фильтры */}
+      <div className="mb-4 flex gap-2">
+        <button
+          onClick={() => setFilter('masters')}
+          className={`flex-1 rounded-xl py-2 text-sm font-medium transition-colors ${
+            filter === 'masters' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+          }`}
+        >
+          Мастера ({masters.length})
+        </button>
+        <button
+          onClick={() => setFilter('clients')}
+          className={`flex-1 rounded-xl py-2 text-sm font-medium transition-colors ${
+            filter === 'clients' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+          }`}
+        >
+          Клиенты ({clients.length})
+        </button>
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
         </div>
-      ) : masters.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Мастеров нет</p>
-      ) : (
-        <div className="space-y-3">
-          {masters.map(m => (
-            <Card key={m.id} className={`overflow-hidden border-border ${m.is_blocked ? 'opacity-60' : ''}`}>
-              {/* Заголовок мастера */}
-              <div
-                className="flex cursor-pointer items-center gap-3 p-3"
-                onClick={() => setExpanded(expanded === m.id ? null : m.id)}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-display font-semibold">{m.name}</p>
-                    {m.is_blocked && <Badge variant="destructive" className="text-[10px]">Заблокирован</Badge>}
+      ) : filter === 'masters' ? (
+        masters.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Мастеров нет</p>
+        ) : (
+          <div className="space-y-3">
+            {masters.map(m => (
+              <Card key={m.id} className={`overflow-hidden border-border ${m.is_blocked ? 'opacity-60' : ''}`}>
+                <div
+                  className="flex cursor-pointer items-center gap-3 p-3"
+                  onClick={() => setExpanded(expanded === m.id ? null : m.id)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-display font-semibold">{m.name}</p>
+                      {m.is_blocked && <Badge variant="destructive" className="text-[10px]">Заблокирован</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{m.email}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Брони: {m.booking_count} · Рейтинг: {m.rating > 0 ? m.rating : '—'} · Услуг: {m.services.length} · Рефералов: {m.ref_count}
+                    </p>
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground/70">
+                      <Icon name="Clock" size={10} />
+                      Был(а): {fmtLastSeen(m.last_seen)}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{m.email}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Брони: {m.booking_count} · Рейтинг: {m.rating > 0 ? m.rating : '—'} · Услуг: {m.services.length} · Рефералов: {m.ref_count}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    disabled={busy}
-                    onClick={e => { e.stopPropagation(); blockMaster(m); }}
-                    className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
-                      m.is_blocked
-                        ? 'bg-success/15 text-success hover:bg-success/25'
-                        : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                    }`}
-                    title={m.is_blocked ? 'Разблокировать' : 'Заблокировать'}
-                  >
-                    <Icon name={m.is_blocked ? 'LockOpen' : 'Lock'} size={14} />
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={e => { e.stopPropagation(); deleteMaster(m); }}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20"
-                    title="Удалить мастера"
-                  >
-                    <Icon name="Trash2" size={14} />
-                  </button>
-                  <Icon name={expanded === m.id ? 'ChevronUp' : 'ChevronDown'} size={16} className="text-muted-foreground" />
-                </div>
-              </div>
-
-              {/* Услуги мастера (раскрывается) */}
-              {expanded === m.id && (
-                <div className="border-t border-border bg-secondary/30 px-3 py-2 space-y-2">
-                  {m.services.length === 0 ? (
-                    <p className="py-2 text-xs text-muted-foreground">Услуг нет</p>
-                  ) : m.services.map(s => (
-                    <div key={s.id}
-                      className={`flex items-center justify-between gap-2 rounded-xl border border-border bg-background p-2 ${s.is_blocked ? 'opacity-60' : ''}`}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      disabled={busy}
+                      onClick={e => { e.stopPropagation(); blockMaster(m); }}
+                      className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
+                        m.is_blocked
+                          ? 'bg-success/15 text-success hover:bg-success/25'
+                          : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      }`}
+                      title={m.is_blocked ? 'Разблокировать' : 'Заблокировать'}
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{s.title}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span>Брони: {s.booking_count}</span>
-                          {s.is_blocked && <Badge variant="destructive" className="text-[9px] px-1 py-0">Заблокирована</Badge>}
-                          {!s.is_active && !s.is_blocked && <Badge variant="secondary" className="text-[9px] px-1 py-0">Неактивна</Badge>}
+                      <Icon name={m.is_blocked ? 'LockOpen' : 'Lock'} size={14} />
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={e => { e.stopPropagation(); deleteMaster(m); }}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      title="Удалить мастера"
+                    >
+                      <Icon name="Trash2" size={14} />
+                    </button>
+                    <Icon name={expanded === m.id ? 'ChevronUp' : 'ChevronDown'} size={16} className="text-muted-foreground" />
+                  </div>
+                </div>
+
+                {expanded === m.id && (
+                  <div className="border-t border-border bg-secondary/30 px-3 py-2 space-y-2">
+                    {m.services.length === 0 ? (
+                      <p className="py-2 text-xs text-muted-foreground">Услуг нет</p>
+                    ) : m.services.map(s => (
+                      <div key={s.id}
+                        className={`flex items-center justify-between gap-2 rounded-xl border border-border bg-background p-2 ${s.is_blocked ? 'opacity-60' : ''}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{s.title}</p>
+                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span>Брони: {s.booking_count}</span>
+                            {s.is_blocked && <Badge variant="destructive" className="text-[9px] px-1 py-0">Заблокирована</Badge>}
+                            {!s.is_active && !s.is_blocked && <Badge variant="secondary" className="text-[9px] px-1 py-0">Неактивна</Badge>}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            disabled={busy}
+                            onClick={() => blockService(session.session_token, s)}
+                            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                              s.is_blocked
+                                ? 'bg-success/15 text-success hover:bg-success/25'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            }`}
+                            title={s.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                          >
+                            <Icon name={s.is_blocked ? 'LockOpen' : 'Lock'} size={12} />
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() => deleteService(session.session_token, s)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20"
+                            title="Удалить услугу"
+                          >
+                            <Icon name="Trash2" size={12} />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          disabled={busy}
-                          onClick={() => blockService(session.session_token, s)}
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-                            s.is_blocked
-                              ? 'bg-success/15 text-success hover:bg-success/25'
-                              : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                          }`}
-                          title={s.is_blocked ? 'Разблокировать' : 'Заблокировать'}
-                        >
-                          <Icon name={s.is_blocked ? 'LockOpen' : 'Lock'} size={12} />
-                        </button>
-                        <button
-                          disabled={busy}
-                          onClick={() => deleteService(session.session_token, s)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20"
-                          title="Удалить услугу"
-                        >
-                          <Icon name="Trash2" size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        )
+      ) : (
+        clients.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Клиентов нет</p>
+        ) : (
+          <div className="space-y-3">
+            {clients.map(c => (
+              <Card key={c.user_id} className="border-border p-3">
+                <div className="min-w-0">
+                  <p className="font-display font-semibold">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.email}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Записей: {c.booking_count}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground/70">
+                    <Icon name="Clock" size={10} />
+                    Был(а): {fmtLastSeen(c.last_seen)}
+                  </p>
                 </div>
-              )}
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )
       )}
 
       <Button variant="outline" size="sm" className="mt-4 w-full rounded-xl" onClick={load} disabled={loading}>

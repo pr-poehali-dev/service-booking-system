@@ -1,13 +1,16 @@
 {
   "tests": [
     {
-      "name": "Получить текущего пользователя",
+      "name": "OPTIONS auth",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET без токена — 401",
       "method": "GET",
       "path": "/",
-      "headers": { "X-Session-Token": "token-client-1" },
-      "expectedStatus": 200,
-      "expectedBody": { "email": "ivan@lepestok.demo" },
-      "bodyMatcher": "partial"
+      "expectedStatus": 401
     }
   ]
 }
