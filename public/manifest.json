@@ -1,0 +1,27 @@
+{
+  "name": "БьютиБук",
+  "short_name": "БьютиБук",
+  "description": "Запись к мастерам красоты онлайн",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf5f7",
+  "theme_color": "#d9607a",
+  "orientation": "portrait",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "https://cdn.poehali.dev/projects/28cea778-46e1-49c3-86e8-ae6d3fa9407f/files/2b2cdd43-c018-4388-9deb-861a69b786c1.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn.poehali.dev/projects/28cea778-46e1-49c3-86e8-ae6d3fa9407f/files/2b2cdd43-c018-4388-9deb-861a69b786c1.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["lifestyle", "health", "beauty"]
+}
