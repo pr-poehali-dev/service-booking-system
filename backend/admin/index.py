@@ -95,21 +95,17 @@ def handler(event: dict, context) -> dict:
             # Клиенты (пользователи без кабинета мастера)
             master_user_ids = [m["user_id"] for m in masters]
             if master_user_ids:
-                placeholders = ",".join(["%s"] * len(master_user_ids))
-                cur.execute(f"""
-                    SELECT id, name, email, last_seen,
-                           (SELECT COUNT(*) FROM {S}.bookings WHERE user_id=u.id AND status != 'cancelled') AS booking_count
-                    FROM {S}.users u
-                    WHERE id NOT IN ({placeholders})
-                    ORDER BY id
-                """, master_user_ids)
+                ids_str = ",".join(str(i) for i in master_user_ids)
+                where = f"WHERE id NOT IN ({ids_str})"
             else:
-                cur.execute(f"""
-                    SELECT id, name, email, last_seen,
-                           (SELECT COUNT(*) FROM {S}.bookings WHERE user_id=u.id AND status != 'cancelled') AS booking_count
-                    FROM {S}.users u
-                    ORDER BY id
-                """)
+                where = ""
+            cur.execute(f"""
+                SELECT id, name, email, last_seen,
+                       (SELECT COUNT(*) FROM {S}.bookings WHERE user_id=u.id AND status != 'cancelled') AS booking_count
+                FROM {S}.users u
+                {where}
+                ORDER BY id
+            """)
 
             clients = []
             for row in cur.fetchall():
