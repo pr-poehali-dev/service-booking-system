@@ -1,31 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="80" fill="#d9607a"/>
-  <!-- Лепестки розы -->
-  <g transform="translate(256,256)">
-    <!-- Центр -->
-    <circle cx="0" cy="0" r="38" fill="#f7c5d0"/>
-    <!-- Лепестки внутренние -->
-    <ellipse cx="0" cy="-52" rx="28" ry="42" fill="#f2a0b5" transform="rotate(0)"/>
-    <ellipse cx="0" cy="-52" rx="28" ry="42" fill="#f2a0b5" transform="rotate(72)"/>
-    <ellipse cx="0" cy="-52" rx="28" ry="42" fill="#f2a0b5" transform="rotate(144)"/>
-    <ellipse cx="0" cy="-52" rx="28" ry="42" fill="#f2a0b5" transform="rotate(216)"/>
-    <ellipse cx="0" cy="-52" rx="28" ry="42" fill="#f2a0b5" transform="rotate(288)"/>
-    <!-- Лепестки средние -->
-    <ellipse cx="0" cy="-80" rx="32" ry="52" fill="#e8809a" transform="rotate(36)"/>
-    <ellipse cx="0" cy="-80" rx="32" ry="52" fill="#e8809a" transform="rotate(108)"/>
-    <ellipse cx="0" cy="-80" rx="32" ry="52" fill="#e8809a" transform="rotate(180)"/>
-    <ellipse cx="0" cy="-80" rx="32" ry="52" fill="#e8809a" transform="rotate(252)"/>
-    <ellipse cx="0" cy="-80" rx="32" ry="52" fill="#e8809a" transform="rotate(324)"/>
-    <!-- Лепестки внешние -->
-    <ellipse cx="0" cy="-108" rx="34" ry="58" fill="#d9607a" opacity="0.7" transform="rotate(18)"/>
-    <ellipse cx="0" cy="-108" rx="34" ry="58" fill="#d9607a" opacity="0.7" transform="rotate(90)"/>
-    <ellipse cx="0" cy="-108" rx="34" ry="58" fill="#d9607a" opacity="0.7" transform="rotate(162)"/>
-    <ellipse cx="0" cy="-108" rx="34" ry="58" fill="#d9607a" opacity="0.7" transform="rotate(234)"/>
-    <ellipse cx="0" cy="-108" rx="34" ry="58" fill="#d9607a" opacity="0.7" transform="rotate(306)"/>
-    <!-- Центральный блик -->
-    <circle cx="0" cy="0" r="22" fill="#fce8ee"/>
-  </g>
-  <!-- Листья -->
-  <ellipse cx="145" cy="360" rx="22" ry="44" fill="#7ab648" transform="rotate(-40,145,360)"/>
-  <ellipse cx="367" cy="360" rx="22" ry="44" fill="#7ab648" transform="rotate(40,367,360)"/>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#d9607a"/>
+  <image href="https://cdn.poehali.dev/projects/28cea778-46e1-49c3-86e8-ae6d3fa9407f/files/fe25b1f9-b6b3-4bbe-913b-43a83b8e02cf.jpg" x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice"/>
 </svg>
