@@ -100,11 +100,13 @@ def handler(event: dict, context) -> dict:
             else:
                 where = ""
             cur.execute(f"""
-                SELECT id, name, email, last_seen,
-                       (SELECT COUNT(*) FROM {S}.bookings WHERE user_id=u.id AND status != 'cancelled') AS booking_count
+                SELECT u.id, u.name, u.email, u.last_seen,
+                       COUNT(b.id) AS booking_count
                 FROM {S}.users u
+                LEFT JOIN {S}.bookings b ON b.user_id = u.id AND b.status != 'cancelled'
                 {where}
-                ORDER BY id
+                GROUP BY u.id, u.name, u.email, u.last_seen
+                ORDER BY u.id
             """)
 
             clients = []
