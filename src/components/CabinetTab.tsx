@@ -370,9 +370,11 @@ export function MasterCabinet({ session, setSession, focusBookingId, focusFilter
         <div className="space-y-3">
           {/* Фильтр по статусу */}
           {(() => {
-            const pending   = bookings.filter(b => b.status === 'pending');
-            const confirmed = bookings.filter(b => b.status === 'confirmed');
-            const done      = bookings.filter(b => b.status === 'done');
+            const bySlot = (a: Booking, b: Booking) => new Date(a.slot_start).getTime() - new Date(b.slot_start).getTime();
+            const bySlotDesc = (a: Booking, b: Booking) => new Date(b.slot_start).getTime() - new Date(a.slot_start).getTime();
+            const pending   = bookings.filter(b => b.status === 'pending').sort(bySlot);
+            const confirmed = bookings.filter(b => b.status === 'confirmed').sort(bySlot);
+            const done      = bookings.filter(b => b.status === 'done').sort(bySlotDesc);
             const FILTERS: { key: 'pending' | 'confirmed' | 'done'; label: string; count: number }[] = [
               { key: 'pending',   label: 'Ожидают',   count: pending.length },
               { key: 'confirmed', label: 'Активные',  count: confirmed.length },
@@ -654,9 +656,11 @@ export function MyBookings({ session, focusBookingId, focusFilter }: { session: 
     else toast.error(res?.error || 'Ошибка');
   };
 
-  const pending   = bookings.filter(b => b.status === 'pending');
-  const confirmed = bookings.filter(b => b.status === 'confirmed');
-  const done      = bookings.filter(b => b.status === 'done');
+  const bySlot = (a: Booking, b: Booking) => new Date(a.slot_start).getTime() - new Date(b.slot_start).getTime();
+  const bySlotDesc = (a: Booking, b: Booking) => new Date(b.slot_start).getTime() - new Date(a.slot_start).getTime();
+  const pending   = bookings.filter(b => b.status === 'pending').sort(bySlot);
+  const confirmed = bookings.filter(b => b.status === 'confirmed').sort(bySlot);
+  const done      = bookings.filter(b => b.status === 'done').sort(bySlotDesc);
 
   function BookingCard({ b }: { b: Booking }) {
     const mins = minutesLeft(b.confirm_by);
