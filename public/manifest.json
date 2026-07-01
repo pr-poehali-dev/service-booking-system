@@ -10,18 +10,23 @@
   "lang": "ru",
   "icons": [
     {
-      "src": "https://cdn.poehali.dev/projects/28cea778-46e1-49c3-86e8-ae6d3fa9407f/files/fe25b1f9-b6b3-4bbe-913b-43a83b8e02cf.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "https://cdn.poehali.dev/projects/28cea778-46e1-49c3-86e8-ae6d3fa9407f/files/fe25b1f9-b6b3-4bbe-913b-43a83b8e02cf.jpg",
-      "sizes": "192x192",
-      "type": "image/jpeg",
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
-  "screenshots": [],
   "categories": ["lifestyle", "health", "beauty"]
 }
