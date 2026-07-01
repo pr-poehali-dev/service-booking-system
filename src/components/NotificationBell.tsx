@@ -109,7 +109,7 @@ export default function NotificationBell({ token, onGoBooking }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-border bg-background shadow-xl">
+        <div className="fixed left-4 right-4 top-16 z-50 mx-auto w-80 max-w-full rounded-2xl border border-border bg-background shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-80">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <span className="text-sm font-semibold">Уведомления</span>
             {items.some(n => !n.is_read) && (
