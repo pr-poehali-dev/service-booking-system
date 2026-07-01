@@ -242,7 +242,7 @@ export default function SlotCalendar({
                             ? 'bg-destructive/50 text-destructive-foreground'
                             : slot.has_booking
                             ? 'bg-primary/50 text-primary'
-                            : 'bg-primary/25 text-primary'
+                            : 'bg-emerald-500/30 text-emerald-700 dark:text-emerald-400'
                           : 'bg-muted/30 hover:bg-secondary'
                       }`}
                     />
