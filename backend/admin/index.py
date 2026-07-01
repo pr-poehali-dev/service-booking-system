@@ -54,7 +54,7 @@ def handler(event: dict, context) -> dict:
         # ── GET — все пользователи ────────────────────────────────────────────
         if method == "GET":
 
-            # 1. Все мастера
+            # 1. Все мастера одним запросом
             cur.execute(f"""
                 SELECT m.id, u.id, u.name, u.email, m.is_blocked, u.last_seen
                 FROM {S}.masters m
@@ -62,81 +62,94 @@ def handler(event: dict, context) -> dict:
                 ORDER BY m.id
             """)
             master_rows = cur.fetchall()
+            master_ids = [r[0] for r in master_rows]
+            master_user_ids = [r[1] for r in master_rows]
+
+            if master_ids:
+                ids_str = ",".join(str(i) for i in master_ids)
+
+                # 2. Брони всех мастеров одним запросом
+                cur.execute(f"""
+                    SELECT master_id, COUNT(*) FROM {S}.bookings
+                    WHERE master_id IN ({ids_str}) AND status <> 'cancelled'
+                    GROUP BY master_id
+                """)
+                booking_counts = {r[0]: int(r[1]) for r in cur.fetchall()}
+
+                # 3. Рейтинги всех мастеров одним запросом
+                cur.execute(f"""
+                    SELECT b.master_id, COALESCE(ROUND(AVG(r.score)::numeric, 1), 0)
+                    FROM {S}.ratings r
+                    JOIN {S}.bookings b ON b.id = r.booking_id
+                    WHERE b.master_id IN ({ids_str}) AND r.from_role = 'client'
+                    GROUP BY b.master_id
+                """)
+                ratings = {r[0]: float(r[1]) for r in cur.fetchall()}
+
+                # 4. Рефералы всех мастеров одним запросом
+                cur.execute(f"""
+                    SELECT referred_by, COUNT(*) FROM {S}.users
+                    WHERE referred_by IN ({ids_str})
+                    GROUP BY referred_by
+                """)
+                ref_counts = {r[0]: int(r[1]) for r in cur.fetchall()}
+
+                # 5. Услуги всех мастеров одним запросом
+                cur.execute(f"""
+                    SELECT s.id, s.master_id, s.title, s.is_active, s.is_blocked,
+                           COUNT(b.id) as bc
+                    FROM {S}.services s
+                    LEFT JOIN {S}.bookings b ON b.service_id = s.id
+                    WHERE s.master_id IN ({ids_str})
+                    GROUP BY s.id, s.master_id, s.title, s.is_active, s.is_blocked
+                    ORDER BY s.id
+                """)
+                services_by_master = {}
+                for sid, mid, title, is_active, sblocked, bc in cur.fetchall():
+                    services_by_master.setdefault(mid, []).append({
+                        "id": sid, "title": title, "is_active": is_active,
+                        "is_blocked": sblocked, "booking_count": int(bc)
+                    })
+            else:
+                booking_counts = {}
+                ratings = {}
+                ref_counts = {}
+                services_by_master = {}
 
             masters = []
             for mid, uid, name, email, is_blocked, last_seen in master_rows:
-
-                # Брони мастера
-                cur.execute(f"""
-                    SELECT COUNT(*) FROM {S}.bookings
-                    WHERE master_id = {mid} AND status <> 'cancelled'
-                """)
-                booking_count = cur.fetchone()[0]
-
-                # Рейтинг
-                cur.execute(f"""
-                    SELECT COALESCE(ROUND(AVG(r.score)::numeric, 1), 0)
-                    FROM {S}.ratings r
-                    JOIN {S}.bookings b ON b.id = r.booking_id
-                    WHERE b.master_id = {mid} AND r.from_role = 'client'
-                """)
-                rating = float(cur.fetchone()[0])
-
-                # Рефералы
-                cur.execute(f"""
-                    SELECT COUNT(*) FROM {S}.users WHERE referred_by = {mid}
-                """)
-                ref_count = cur.fetchone()[0]
-
-                # Услуги
-                cur.execute(f"""
-                    SELECT id, title, is_active, is_blocked FROM {S}.services
-                    WHERE master_id = {mid} ORDER BY id
-                """)
-                services = []
-                for sid, title, is_active, sblocked in cur.fetchall():
-                    cur.execute(f"SELECT COUNT(*) FROM {S}.bookings WHERE service_id = {sid}")
-                    bc = cur.fetchone()[0]
-                    services.append({
-                        "id": sid, "title": title, "is_active": is_active,
-                        "is_blocked": sblocked, "booking_count": bc
-                    })
-
                 masters.append({
                     "id": mid, "user_id": uid, "name": name, "email": email,
-                    "is_blocked": is_blocked, "rating": rating,
-                    "booking_count": int(booking_count), "ref_count": int(ref_count),
-                    "services": services,
+                    "is_blocked": is_blocked,
+                    "rating": ratings.get(mid, 0.0),
+                    "booking_count": booking_counts.get(mid, 0),
+                    "ref_count": ref_counts.get(mid, 0),
+                    "services": services_by_master.get(mid, []),
                     "last_seen": last_seen.isoformat() if last_seen else None,
                     "is_master": True,
                 })
 
-            # 2. Клиенты (без кабинета мастера)
-            master_user_ids = [m["user_id"] for m in masters]
+            # 6. Клиенты одним запросом (без мастеров)
             if master_user_ids:
-                ids_str = ",".join(str(i) for i in master_user_ids)
-                client_filter = f"WHERE u.id NOT IN ({ids_str})"
+                excl = ",".join(str(i) for i in master_user_ids)
+                client_filter = f"WHERE u.id NOT IN ({excl})"
             else:
                 client_filter = ""
 
             cur.execute(f"""
-                SELECT u.id, u.name, u.email, u.last_seen
+                SELECT u.id, u.name, u.email, u.last_seen,
+                       COUNT(b.id) FILTER (WHERE b.status <> 'cancelled') as bc
                 FROM {S}.users u
+                LEFT JOIN {S}.bookings b ON b.client_id = u.id
                 {client_filter}
+                GROUP BY u.id, u.name, u.email, u.last_seen
                 ORDER BY u.id
             """)
-            client_rows = cur.fetchall()
-
             clients = []
-            for uid, name, email, last_seen in client_rows:
-                cur.execute(f"""
-                    SELECT COUNT(*) FROM {S}.bookings
-                    WHERE client_id = {uid} AND status <> 'cancelled'
-                """)
-                booking_count = cur.fetchone()[0]
+            for uid, name, email, last_seen, bc in cur.fetchall():
                 clients.append({
                     "user_id": uid, "name": name, "email": email,
-                    "booking_count": int(booking_count),
+                    "booking_count": int(bc or 0),
                     "last_seen": last_seen.isoformat() if last_seen else None,
                     "is_master": False,
                 })
@@ -201,4 +214,5 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "unknown action"})}
 
     finally:
+        cur.close()
         conn.close()
