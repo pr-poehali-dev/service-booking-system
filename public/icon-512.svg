@@ -1,56 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#f2a0b5"/>
-      <stop offset="100%" stop-color="#c04868"/>
-    </radialGradient>
-    <radialGradient id="petal1" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#fce8ee"/>
-      <stop offset="100%" stop-color="#e8809a"/>
-    </radialGradient>
-    <radialGradient id="petal2" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#f7c5d0"/>
-      <stop offset="100%" stop-color="#d9607a"/>
-    </radialGradient>
-    <radialGradient id="center" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#fff0f4"/>
-      <stop offset="100%" stop-color="#f2a0b5"/>
-    </radialGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#a03050" flood-opacity="0.3"/>
-    </filter>
-  </defs>
-
-  <rect width="512" height="512" fill="url(#bg)"/>
-
-  <g transform="translate(256,248)" filter="url(#shadow)">
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(0)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(45)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(90)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(135)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(180)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(225)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(270)"/>
-    <ellipse cx="0" cy="-118" rx="44" ry="72" fill="url(#petal2)" opacity="0.75" transform="rotate(315)"/>
-
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(22)"/>
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(82)"/>
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(142)"/>
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(202)"/>
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(262)"/>
-    <ellipse cx="0" cy="-80" rx="38" ry="62" fill="url(#petal1)" transform="rotate(322)"/>
-
-    <ellipse cx="0" cy="-50" rx="30" ry="46" fill="#fce8ee" transform="rotate(0)"/>
-    <ellipse cx="0" cy="-50" rx="30" ry="46" fill="#fce8ee" transform="rotate(72)"/>
-    <ellipse cx="0" cy="-50" rx="30" ry="46" fill="#fce8ee" transform="rotate(144)"/>
-    <ellipse cx="0" cy="-50" rx="30" ry="46" fill="#fce8ee" transform="rotate(216)"/>
-    <ellipse cx="0" cy="-50" rx="30" ry="46" fill="#fce8ee" transform="rotate(288)"/>
-
-    <circle cx="0" cy="0" r="36" fill="url(#center)"/>
-    <circle cx="-8" cy="-8" r="14" fill="white" opacity="0.4"/>
+  <rect width="512" height="512" rx="112" fill="#d9607a"/>
+  <g transform="translate(256,256) scale(14) translate(-12,-12)" stroke="#fdf5f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+    <path d="M20 3v4"/>
+    <path d="M22 5h-4"/>
+    <path d="M4 17v2"/>
+    <path d="M5 18H3"/>
   </g>
-
-  <ellipse cx="148" cy="370" rx="24" ry="52" fill="#6aaa3a" opacity="0.9" transform="rotate(-35,148,370)"/>
-  <ellipse cx="364" cy="370" rx="24" ry="52" fill="#6aaa3a" opacity="0.9" transform="rotate(35,364,370)"/>
-  <ellipse cx="200" cy="400" rx="16" ry="38" fill="#7abb48" opacity="0.7" transform="rotate(-55,200,400)"/>
 </svg>
