@@ -142,15 +142,21 @@ def handler(event: dict, context) -> dict:
             master_id = params.get("master_id")
             if master_id:
                 cur.execute(f"""
+                    WITH last_ratings AS (
+                        SELECT DISTINCT ON (b.client_id) b.master_id, r.score
+                        FROM {S}.bookings b
+                        JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
+                        WHERE b.status='done'
+                        ORDER BY b.client_id, r.id DESC
+                    )
                     SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
                            m.photo_url,
-                           COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
-                           COUNT(DISTINCT r.id) AS review_count,
+                           COALESCE(ROUND(AVG(lr.score)::numeric,1), 0) AS rating,
+                           COUNT(lr.score) AS review_count,
                            m.ref_code
                     FROM {S}.masters m
                     JOIN {S}.users u ON u.id=m.user_id
-                    LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
-                    LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
+                    LEFT JOIN last_ratings lr ON lr.master_id=m.id
                     WHERE m.id=%s
                     GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url, m.ref_code
                 """, (master_id,))
@@ -174,15 +180,21 @@ def handler(event: dict, context) -> dict:
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps(master)}
             else:
                 cur.execute(f"""
+                    WITH last_ratings AS (
+                        SELECT DISTINCT ON (b.client_id) b.master_id, r.score
+                        FROM {S}.bookings b
+                        JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
+                        WHERE b.status='done'
+                        ORDER BY b.client_id, r.id DESC
+                    )
                     SELECT m.id, u.id AS user_id, u.name, m.about, m.address,
                            m.photo_url,
-                           COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
-                           COUNT(DISTINCT r.id) AS review_count,
+                           COALESCE(ROUND(AVG(lr.score)::numeric,1), 0) AS rating,
+                           COUNT(lr.score) AS review_count,
                            ARRAY_AGG(DISTINCT s.title) FILTER (WHERE s.title IS NOT NULL) AS service_titles
                     FROM {S}.masters m
                     JOIN {S}.users u ON u.id=m.user_id
-                    LEFT JOIN {S}.bookings b ON b.master_id=m.id AND b.status='done'
-                    LEFT JOIN {S}.ratings r ON r.booking_id=b.id AND r.from_role='client'
+                    LEFT JOIN last_ratings lr ON lr.master_id=m.id
                     LEFT JOIN {S}.services s ON s.master_id=m.id AND s.is_active=TRUE AND s.is_blocked=FALSE
                     WHERE m.is_blocked=FALSE
                     GROUP BY m.id, u.id, u.name, m.about, m.address, m.photo_url

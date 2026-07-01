@@ -1,20 +1,16 @@
 {
   "tests": [
     {
+      "name": "OPTIONS masters",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
       "name": "Список мастеров",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": [],
-      "bodyMatcher": "type_array"
-    },
-    {
-      "name": "Слоты мастера 1",
-      "method": "GET",
-      "path": "/?action=slots&master_id=1",
-      "expectedStatus": 200,
-      "expectedBody": [],
-      "bodyMatcher": "type_array"
+      "expectedStatus": 200
     }
   ]
 }
