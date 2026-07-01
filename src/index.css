@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  background-color: hsl(var(--background));
+}
+
 @layer base {
   :root {
     --background: 350 60% 99%;
