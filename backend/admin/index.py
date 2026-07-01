@@ -131,7 +131,7 @@ def handler(event: dict, context) -> dict:
             for uid, name, email, last_seen in client_rows:
                 cur.execute(f"""
                     SELECT COUNT(*) FROM {S}.bookings
-                    WHERE user_id = {uid} AND status <> 'cancelled'
+                    WHERE client_id = {uid} AND status <> 'cancelled'
                 """)
                 booking_count = cur.fetchone()[0]
                 clients.append({
