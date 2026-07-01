@@ -10,7 +10,6 @@ import json, os
 import psycopg2
 
 S = "t_p84631928_service_booking_syst"
-ADMIN_EMAIL = "bouh.cbeta@gmail.com"
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -30,12 +29,13 @@ def get_token(event):
 def resolve_admin(cur, token):
     if not token:
         return False
-    cur.execute(f"SELECT is_admin FROM {S}.users WHERE session_token=%s", (token,))
+    cur.execute(f"SELECT is_admin FROM {S}.users WHERE session_token = '{token}'")
     row = cur.fetchone()
     return bool(row and row[0])
 
 
 def handler(event: dict, context) -> dict:
+    """Панель администратора: список пользователей, управление мастерами и услугами."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
@@ -51,67 +51,89 @@ def handler(event: dict, context) -> dict:
         params = event.get("queryStringParameters") or {}
         action = params.get("action", "")
 
-        # ── GET — все пользователи: мастера + клиенты ─────────────────────────
+        # ── GET — все пользователи ────────────────────────────────────────────
         if method == "GET":
-            # Мастера с услугами
+
+            # 1. Все мастера
             cur.execute(f"""
-                SELECT m.id, u.id AS user_id, u.name, u.email, m.is_blocked,
-                       COALESCE(ROUND(AVG(r.score)::numeric,1), 0) AS rating,
-                       COUNT(DISTINCT b.id) AS booking_count,
-                       COUNT(DISTINCT ru.id) AS ref_count,
-                       u.last_seen
+                SELECT m.id, u.id, u.name, u.email, m.is_blocked, u.last_seen
                 FROM {S}.masters m
                 JOIN {S}.users u ON u.id = m.user_id
-                LEFT JOIN {S}.bookings b ON b.master_id = m.id AND b.status != 'cancelled'
-                LEFT JOIN {S}.bookings bd ON bd.master_id = m.id AND bd.status = 'done'
-                LEFT JOIN {S}.ratings r ON r.booking_id = bd.id AND r.from_role = 'client'
-                LEFT JOIN {S}.users ru ON ru.referred_by = m.id
-                GROUP BY m.id, u.id, u.name, u.email, m.is_blocked, u.last_seen
                 ORDER BY m.id
             """)
+            master_rows = cur.fetchall()
+
             masters = []
-            for row in cur.fetchall():
-                mid, uid, name, email, is_blocked, rating, booking_count, ref_count, last_seen = row
+            for mid, uid, name, email, is_blocked, last_seen in master_rows:
+
+                # Брони мастера
                 cur.execute(f"""
-                    SELECT id, title, is_active, is_blocked,
-                           (SELECT COUNT(*) FROM {S}.bookings WHERE service_id=s.id) AS booking_count
-                    FROM {S}.services s
-                    WHERE master_id=%s ORDER BY id
-                """, (mid,))
-                services = [
-                    {"id": r[0], "title": r[1], "is_active": r[2],
-                     "is_blocked": r[3], "booking_count": r[4]}
-                    for r in cur.fetchall()
-                ]
+                    SELECT COUNT(*) FROM {S}.bookings
+                    WHERE master_id = {mid} AND status <> 'cancelled'
+                """)
+                booking_count = cur.fetchone()[0]
+
+                # Рейтинг
+                cur.execute(f"""
+                    SELECT COALESCE(ROUND(AVG(r.score)::numeric, 1), 0)
+                    FROM {S}.ratings r
+                    JOIN {S}.bookings b ON b.id = r.booking_id
+                    WHERE b.master_id = {mid} AND r.from_role = 'client'
+                """)
+                rating = float(cur.fetchone()[0])
+
+                # Рефералы
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM {S}.users WHERE referred_by = {mid}
+                """)
+                ref_count = cur.fetchone()[0]
+
+                # Услуги
+                cur.execute(f"""
+                    SELECT id, title, is_active, is_blocked FROM {S}.services
+                    WHERE master_id = {mid} ORDER BY id
+                """)
+                services = []
+                for sid, title, is_active, sblocked in cur.fetchall():
+                    cur.execute(f"SELECT COUNT(*) FROM {S}.bookings WHERE service_id = {sid}")
+                    bc = cur.fetchone()[0]
+                    services.append({
+                        "id": sid, "title": title, "is_active": is_active,
+                        "is_blocked": sblocked, "booking_count": bc
+                    })
+
                 masters.append({
                     "id": mid, "user_id": uid, "name": name, "email": email,
-                    "is_blocked": is_blocked, "rating": float(rating),
-                    "booking_count": booking_count, "ref_count": ref_count,
+                    "is_blocked": is_blocked, "rating": rating,
+                    "booking_count": int(booking_count), "ref_count": int(ref_count),
                     "services": services,
                     "last_seen": last_seen.isoformat() if last_seen else None,
                     "is_master": True,
                 })
 
-            # Клиенты (пользователи без кабинета мастера)
+            # 2. Клиенты (без кабинета мастера)
             master_user_ids = [m["user_id"] for m in masters]
             if master_user_ids:
                 ids_str = ",".join(str(i) for i in master_user_ids)
-                where = f"WHERE id NOT IN ({ids_str})"
+                client_filter = f"WHERE u.id NOT IN ({ids_str})"
             else:
-                where = ""
+                client_filter = ""
+
             cur.execute(f"""
-                SELECT u.id, u.name, u.email, u.last_seen,
-                       COUNT(b.id) AS booking_count
+                SELECT u.id, u.name, u.email, u.last_seen
                 FROM {S}.users u
-                LEFT JOIN {S}.bookings b ON b.user_id = u.id AND b.status != 'cancelled'
-                {where}
-                GROUP BY u.id, u.name, u.email, u.last_seen
+                {client_filter}
                 ORDER BY u.id
             """)
+            client_rows = cur.fetchall()
 
             clients = []
-            for row in cur.fetchall():
-                uid, name, email, last_seen, booking_count = row
+            for uid, name, email, last_seen in client_rows:
+                cur.execute(f"""
+                    SELECT COUNT(*) FROM {S}.bookings
+                    WHERE user_id = {uid} AND status <> 'cancelled'
+                """)
+                booking_count = cur.fetchone()[0]
                 clients.append({
                     "user_id": uid, "name": name, "email": email,
                     "booking_count": int(booking_count),
@@ -124,63 +146,55 @@ def handler(event: dict, context) -> dict:
         if method == "POST":
             body = json.loads(event.get("body") or "{}")
 
-            # ── Блокировка мастера ─────────────────────────────────────────────
             if action == "block_master":
                 master_id = int(body["master_id"])
                 blocked = bool(body.get("blocked", True))
-                cur.execute(f"UPDATE {S}.masters SET is_blocked=%s WHERE id=%s", (blocked, master_id))
+                cur.execute(f"UPDATE {S}.masters SET is_blocked = {blocked} WHERE id = {master_id}")
                 if blocked:
                     cur.execute(f"""
-                        UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
-                        WHERE master_id=%s AND status IN ('pending','confirmed')
-                    """, (master_id,))
+                        UPDATE {S}.bookings SET status = 'cancelled', updated_at = NOW()
+                        WHERE master_id = {master_id} AND status IN ('pending', 'confirmed')
+                    """)
                 conn.commit()
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
-            # ── Удаление мастера ───────────────────────────────────────────────
             if action == "delete_master":
                 master_id = int(body["master_id"])
                 cur.execute(f"""
                     DELETE FROM {S}.ratings
-                    WHERE booking_id IN (
-                        SELECT id FROM {S}.bookings WHERE master_id=%s
-                    )
-                """, (master_id,))
-                cur.execute(f"DELETE FROM {S}.bookings WHERE master_id=%s", (master_id,))
-                cur.execute(f"DELETE FROM {S}.slots WHERE master_id=%s", (master_id,))
-                cur.execute(f"DELETE FROM {S}.services WHERE master_id=%s", (master_id,))
+                    WHERE booking_id IN (SELECT id FROM {S}.bookings WHERE master_id = {master_id})
+                """)
+                cur.execute(f"DELETE FROM {S}.bookings WHERE master_id = {master_id}")
+                cur.execute(f"DELETE FROM {S}.slots WHERE master_id = {master_id}")
+                cur.execute(f"DELETE FROM {S}.services WHERE master_id = {master_id}")
                 cur.execute(f"""
-                    UPDATE {S}.users SET is_master=FALSE
-                    WHERE id=(SELECT user_id FROM {S}.masters WHERE id=%s)
-                """, (master_id,))
-                cur.execute(f"DELETE FROM {S}.masters WHERE id=%s", (master_id,))
+                    UPDATE {S}.users SET is_master = FALSE
+                    WHERE id = (SELECT user_id FROM {S}.masters WHERE id = {master_id})
+                """)
+                cur.execute(f"DELETE FROM {S}.masters WHERE id = {master_id}")
                 conn.commit()
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
-            # ── Блокировка услуги ──────────────────────────────────────────────
             if action == "block_service":
                 service_id = int(body["service_id"])
                 blocked = bool(body.get("blocked", True))
-                cur.execute(f"UPDATE {S}.services SET is_blocked=%s WHERE id=%s", (blocked, service_id))
+                cur.execute(f"UPDATE {S}.services SET is_blocked = {blocked} WHERE id = {service_id}")
                 if blocked:
                     cur.execute(f"""
-                        UPDATE {S}.bookings SET status='cancelled', updated_at=NOW()
-                        WHERE service_id=%s AND status IN ('pending','confirmed')
-                    """, (service_id,))
+                        UPDATE {S}.bookings SET status = 'cancelled', updated_at = NOW()
+                        WHERE service_id = {service_id} AND status IN ('pending', 'confirmed')
+                    """)
                 conn.commit()
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
-            # ── Удаление услуги ────────────────────────────────────────────────
             if action == "delete_service":
                 service_id = int(body["service_id"])
                 cur.execute(f"""
                     DELETE FROM {S}.ratings
-                    WHERE booking_id IN (
-                        SELECT id FROM {S}.bookings WHERE service_id=%s
-                    )
-                """, (service_id,))
-                cur.execute(f"DELETE FROM {S}.bookings WHERE service_id=%s", (service_id,))
-                cur.execute(f"UPDATE {S}.services SET is_active=FALSE, is_blocked=TRUE WHERE id=%s", (service_id,))
+                    WHERE booking_id IN (SELECT id FROM {S}.bookings WHERE service_id = {service_id})
+                """)
+                cur.execute(f"DELETE FROM {S}.bookings WHERE service_id = {service_id}")
+                cur.execute(f"UPDATE {S}.services SET is_active = FALSE, is_blocked = TRUE WHERE id = {service_id}")
                 conn.commit()
                 return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
